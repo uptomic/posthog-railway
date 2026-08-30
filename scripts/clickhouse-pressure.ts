@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { isIP } from "node:net";
-import { assertPressureReceipt, calibrateBufferPool, maximumOverlap, parseSchedulerMetrics, sampleScheduler,
+import { assertEightStreamPipeline, assertPressureReceipt, calibrateBufferPool, maximumOverlap, parseSchedulerMetrics, sampleScheduler,
   saturationRun, type PressureReceipt, type SchedulerMetrics, type SchedulerSample } from "./lib/clickhouse-pressure";
 
 const candidate = Bun.argv[2];
@@ -140,6 +140,12 @@ async function run(image: string, kind: PressureReceipt["kind"]): Promise<void> 
   assert.equal(actual.background_schedule_pool_size, 128);
   assert.equal(actual.background_message_broker_schedule_pool_size, 128);
   if (kind === "candidate") assert.equal(await query("SELECT value FROM system.settings WHERE name='max_threads'"), "8");
+  stage = `${kind}:eight-stream-pipeline`;
+  // Plan only: no UDF execution. This guards runner-specific source/memory
+  // clamps independently of the actual worker gauge observed during load.
+  const pipeline = await query(`EXPLAIN PIPELINE ${loadSql.replace(/FORMAT TabSeparated\s*$/, "")}`);
+  assertEightStreamPipeline(pipeline);
+  console.log(JSON.stringify({ stage, sourceStreams: 8, filterStreams: 8, aggregationStreams: 8 }));
 
   // Empty test databases lack production's native Kafka threads. Reserve the
   // observed 243 non-global tasks without CPU work, network or test-image edits.
@@ -213,7 +219,8 @@ async function run(image: string, kind: PressureReceipt["kind"]): Promise<void> 
   await query("SYSTEM FLUSH LOGS", 10_000);
   assert.ok(history.length > 0, "No direct scheduler observations captured");
   const saturation = saturationRun(history);
-  const peakQueryThreads = Math.max(...history.map(row => row.queryThreads));
+  const peakProtocolQueryThreads = Math.max(...history.map(row => row.protocolQueryThreads));
+  const peakPipelineThreads = Math.max(...history.map(row => row.pipelineThreads));
   const intervals = JSON.parse(await query(`SELECT query_id,
     min(toUnixTimestamp64Milli(query_start_time_microseconds)) AS started,
     maxIf(toUnixTimestamp64Milli(event_time_microseconds),type!='QueryStart') AS finished,
@@ -230,9 +237,9 @@ async function run(image: string, kind: PressureReceipt["kind"]): Promise<void> 
   const receipt: PressureReceipt = { kind, baselineActive: active, peakPids, pidLimitEvents: pidEvents, oomKills: oom,
     correctQueries: correct, watchdogFailures, saturatedSamples: saturation.samples, saturatedSpanMs: saturation.spanMs,
     peakActive: Math.max(...history.map(row => row.active)), overlappingQueries,
-    launchedQueries: new Set(queryIds).size, peakQueryThreads,
+    launchedQueries: new Set(queryIds).size, peakProtocolQueryThreads, peakPipelineThreads,
     finalActive: recovered.GlobalThreadActive, finalScheduled: recovered.GlobalThreadScheduled };
-  console.log(JSON.stringify({ receipt, peakQueryThreads, metricObservation: "direct-prometheus-atomic-gauges",
+  console.log(JSON.stringify({ receipt, metricObservation: "direct-prometheus-atomic-gauges",
     metricSamples: history.length, sampleSpanMs: history.at(-1)!.atMs - history[0].atMs,
     persistedQueryStarts: startedIntervals.length,
     censoredQueryIntervals: startedIntervals.filter(interval => !Number(interval.finished)).length, failures }));

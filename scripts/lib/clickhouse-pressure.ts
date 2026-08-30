@@ -15,7 +15,8 @@ export interface PressureReceipt {
   finalScheduled: number;
   overlappingQueries: number;
   launchedQueries: number;
-  peakQueryThreads: number;
+  peakProtocolQueryThreads: number;
+  peakPipelineThreads: number;
 }
 
 export function calibrateBufferPool(current: number, active: number): number {
@@ -25,8 +26,8 @@ export function calibrateBufferPool(current: number, active: number): number {
   return next;
 }
 
-export interface SchedulerSample { atMs: number; active: number; scheduled: number; queryThreads: number }
-const schedulerGaugeNames = ["GlobalThread", "GlobalThreadActive", "GlobalThreadScheduled", "Query", "QueryThread"] as const;
+export interface SchedulerSample { atMs: number; active: number; scheduled: number; protocolQueryThreads: number; pipelineThreads: number }
+const schedulerGaugeNames = ["GlobalThread", "GlobalThreadActive", "GlobalThreadScheduled", "Query", "QueryThread", "QueryPipelineExecutorThreadsActive"] as const;
 export type SchedulerMetrics = Record<typeof schedulerGaugeNames[number], number>;
 
 export function parseSchedulerMetrics(body: string): SchedulerMetrics {
@@ -53,7 +54,8 @@ export async function sampleScheduler(read: () => Promise<SchedulerMetrics>, sho
     const started = performance.now();
     const metrics = await read(); // Failed observations throw; never synthesize zeros or repeat stale values.
     samples.push({ atMs: performance.now(), active: metrics.GlobalThreadActive,
-      scheduled: metrics.GlobalThreadScheduled, queryThreads: metrics.QueryThread });
+      scheduled: metrics.GlobalThreadScheduled, protocolQueryThreads: metrics.QueryThread,
+      pipelineThreads: metrics.QueryPipelineExecutorThreadsActive });
     await Bun.sleep(Math.max(0, intervalMs - (performance.now() - started)));
   }
   return samples;
@@ -88,6 +90,12 @@ export function maximumOverlap(intervals: Array<{ started: number; finished: num
     interval.started <= point.started && interval.finished > point.started).length));
 }
 
+export function assertEightStreamPipeline(plan: string): void {
+  for (const processor of ["NumbersRange", "FilterTransform", "AggregatingTransform"]) {
+    assert.match(plan, new RegExp(`\\b${processor}\\s*×\\s*8\\b`), `Expected eight ${processor} streams`);
+  }
+}
+
 export function assertPressureReceipt(receipt: PressureReceipt): void {
   assert.ok(receipt.kind === "baseline" || receipt.kind === "candidate", "Unknown pressure image kind");
   for (const [key, value] of Object.entries(receipt)) {
@@ -102,14 +110,14 @@ export function assertPressureReceipt(receipt: PressureReceipt): void {
     // Admission itself can stall before all six start. Require real concurrent
     // work, but do not require the defective scheduler to admit every query.
     assert.ok(receipt.overlappingQueries >= 2, "Old queries did not actually overlap");
-    assert.ok(receipt.peakQueryThreads > 1, "Old load never exercised parallel workers");
+    assert.ok(receipt.peakPipelineThreads > 1, "Old load never exercised parallel workers");
     assert.equal(receipt.peakActive, 512, "Old global pool did not saturate");
     assert.ok(receipt.saturatedSamples >= 3, "No sustained old-image queued saturation");
     assert.ok(receipt.saturatedSpanMs >= 2000, "Old-image saturation was only transient");
     assert.ok(receipt.watchdogFailures > 0, "No execution watchdog failure reproduced");
   } else {
     assert.equal(receipt.overlappingQueries, 6, "Six candidate queries did not overlap");
-    assert.ok(receipt.peakQueryThreads >= 16, "Candidate load did not exercise parallel streams");
+    assert.ok(receipt.peakPipelineThreads >= 16, "Candidate load did not exercise parallel streams");
     assert.equal(receipt.correctQueries, 6, "Concurrent UDF result mismatch or failure");
     assert.equal(receipt.watchdogFailures, 0, "Candidate execution watchdog failed");
     assert.ok(receipt.peakActive < 640, "Candidate exhausted global headroom");

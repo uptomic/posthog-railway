@@ -1,18 +1,18 @@
 import { expect, test } from "bun:test";
-import { assertPressureReceipt, calibrateBufferPool, maximumOverlap, parseSchedulerMetrics, sampleScheduler, saturationRun, type PressureReceipt } from "./lib/clickhouse-pressure";
+import { assertEightStreamPipeline, assertPressureReceipt, calibrateBufferPool, maximumOverlap, parseSchedulerMetrics, sampleScheduler, saturationRun, type PressureReceipt } from "./lib/clickhouse-pressure";
 
 const green: PressureReceipt = { kind: "candidate", baselineActive: 480, peakPids: 890, pidLimitEvents: 0,
   oomKills: 0, correctQueries: 6, watchdogFailures: 0, saturatedSamples: 0, peakActive: 590,
   finalActive: 480, finalScheduled: 480, overlappingQueries: 6, saturatedSpanMs: 0,
-  launchedQueries: 6, peakQueryThreads: 16 };
+  launchedQueries: 6, peakProtocolQueryThreads: 6, peakPipelineThreads: 16 };
 const red: PressureReceipt = { ...green, kind: "baseline", correctQueries: 0, watchdogFailures: 3,
   saturatedSamples: 12, saturatedSpanMs: 11000, peakActive: 512, finalActive: 480, finalScheduled: 480,
-  overlappingQueries: 2, peakQueryThreads: 2 };
+  overlappingQueries: 2, peakProtocolQueryThreads: 17, peakPipelineThreads: 2 };
 
 test("accepts only calibrated scheduler saturation as old-image RED", () => {
   expect(() => assertPressureReceipt(red)).not.toThrow();
   for (const change of [{ saturatedSamples: 0 }, { saturatedSpanMs: 1000 }, { peakActive: 511 }, { watchdogFailures: 0 },
-    { baselineActive: 450 }, { launchedQueries: 5 }, { overlappingQueries: 1 }, { peakQueryThreads: 1 },
+    { baselineActive: 450 }, { launchedQueries: 5 }, { overlappingQueries: 1 }, { peakPipelineThreads: 1 },
     { peakPids: 950 }, { pidLimitEvents: 1 }, { oomKills: 1 }]) {
     expect(() => assertPressureReceipt({ ...red, ...change })).toThrow();
   }
@@ -22,9 +22,22 @@ test("candidate requires correct concurrent UDF results, watchdog, recovery and 
   expect(() => assertPressureReceipt(green)).not.toThrow();
   for (const change of [{ correctQueries: 5 }, { watchdogFailures: 1 }, { finalActive: 510 },
     { finalScheduled: 510 }, { peakActive: 640 }, { peakPids: 950 }, { pidLimitEvents: 1 }, { oomKills: 1 },
-    { overlappingQueries: 5 }, { launchedQueries: 5 }, { peakQueryThreads: 15 }]) {
+    { overlappingQueries: 5 }, { launchedQueries: 5 }, { peakPipelineThreads: 15 }]) {
     expect(() => assertPressureReceipt({ ...green, ...change })).toThrow();
   }
+});
+
+test("protocol handlers never stand in for actual parallel pipeline workers", () => {
+  expect(() => assertPressureReceipt({ ...green, peakProtocolQueryThreads: 6, peakPipelineThreads: 48 })).not.toThrow();
+  expect(() => assertPressureReceipt({ ...green, peakProtocolQueryThreads: 48, peakPipelineThreads: 6 })).toThrow("parallel streams");
+  expect(() => assertPressureReceipt({ ...red, peakProtocolQueryThreads: 17, peakPipelineThreads: 1 })).toThrow("parallel workers");
+});
+
+test("the exact workload must plan eight number, filter and aggregation streams", () => {
+  const plan = "ExpressionTransform × 8\nAggregatingTransform × 8\nFilterTransform × 8\nNumbersRange × 8 0 → 1";
+  expect(() => assertEightStreamPipeline(plan)).not.toThrow();
+  expect(() => assertEightStreamPipeline(plan.replace("NumbersRange × 8", "NumbersRange × 1"))).toThrow();
+  expect(() => assertEightStreamPipeline("NumbersRange × 8 0 → 1")).toThrow();
 });
 
 test("fixture-only buffer calibration targets production's observed occupancy and fails closed", () => {
@@ -47,14 +60,15 @@ test("saturation uses actual sample times without interpolating missing observat
 
 const exposition = ["# TYPE ClickHouseMetrics_GlobalThread gauge", "ClickHouseMetrics_GlobalThread 512",
   "ClickHouseMetrics_GlobalThreadActive 512", "ClickHouseMetrics_GlobalThreadScheduled 600",
-  "ClickHouseMetrics_Query 6", "ClickHouseMetrics_QueryThread 12"].join("\n");
+  "ClickHouseMetrics_Query 6", "ClickHouseMetrics_QueryThread 6",
+  "ClickHouseMetrics_QueryPipelineExecutorThreadsActive 48"].join("\n");
 
 test("reads complete direct atomic scheduler gauges and never substitutes missing scrapes with zero", () => {
   expect(parseSchedulerMetrics(exposition)).toEqual({ GlobalThread: 512, GlobalThreadActive: 512,
-    GlobalThreadScheduled: 600, Query: 6, QueryThread: 12 });
-  for (const invalid of ["", "<html>unavailable</html>", exposition.replace("ClickHouseMetrics_QueryThread 12", ""),
-    `${exposition}\nClickHouseMetrics_GlobalThread 512`, exposition.replace("QueryThread 12", "QueryThread NaN"),
-    exposition.replace("QueryThread 12", "QueryThread -1"), exposition.replace("QueryThread 12", 'QueryThread{host="unexpected"} 12')]) {
+    GlobalThreadScheduled: 600, Query: 6, QueryThread: 6, QueryPipelineExecutorThreadsActive: 48 });
+  for (const invalid of ["", "<html>unavailable</html>", exposition.replace("ClickHouseMetrics_QueryPipelineExecutorThreadsActive 48", ""),
+    `${exposition}\nClickHouseMetrics_GlobalThread 512`, exposition.replace("QueryThread 6", "QueryThread NaN"),
+    exposition.replace("QueryThread 6", "QueryThread -1"), exposition.replace("QueryThread 6", 'QueryThread{host="unexpected"} 6')]) {
     expect(() => parseSchedulerMetrics(invalid)).toThrow();
   }
 });
@@ -92,7 +106,7 @@ test("sampler keeps observing real local HTTP while another operation is blocked
     stop = true;
     const samples = await sampler;
     expect(samples.length).toBeGreaterThanOrEqual(3);
-    expect(samples.every(sample => sample.active === 512 && sample.queryThreads === 12)).toBe(true);
+    expect(samples.every(sample => sample.active === 512 && sample.protocolQueryThreads === 6 && sample.pipelineThreads === 48)).toBe(true);
   } finally {
     clearTimeout(timeout);
     stop = true;

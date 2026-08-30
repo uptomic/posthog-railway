@@ -198,6 +198,16 @@ interpolation, repeated stale values or fabricated zeroes are accepted. The seri
 watchdog runs concurrently and cannot delay this observer. None of these listener options
 is baked into the production image.
 
+Worker parallelism is measured using `QueryPipelineExecutorThreadsActive`, the active-job
+counter on the exact engine's [pipeline executor pool](https://github.com/ClickHouse/ClickHouse/blob/v26.6.2.158-stable/src/Processors/Executors/PipelineExecutor.cpp).
+`QueryThread` is retained only as a protocol-handler diagnostic: the native
+[TCP handler](https://github.com/ClickHouse/ClickHouse/blob/v26.6.2.158-stable/src/Server/TCPHandler.cpp)
+increments it once per query, so stalled watchdogs can inflate it without proving parallel
+workers. Before either image's pressure load, `EXPLAIN PIPELINE` must show eight number,
+filter and aggregation streams. Actual candidate execution must still show at least sixteen
+active pipeline workers. The SQL workload is identical between both images; the existing
+old/new acceptance thresholds remain unchanged.
+
 An image build or static test is not this runtime proof. Do not promote until both exact-image
 RED/GREEN and the existing mounted-volume UDF gate pass. After promotion, repeat the original
 saved funnel and observe production scheduler/PID headroom; explicit query overrides and
