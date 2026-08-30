@@ -2,13 +2,17 @@
 
 ## Preconditions
 
-- The candidate lock and three Uptomic-built images identify the same upstream commit.
+- The candidate lock and Uptomic-built MCP image identify the same upstream commit.
 - Every official component digest is immutable and its embedded revision is an ancestor of the
   candidate commit.
 - Railway production topology and rendered variables have been exported without secret values.
 - Manual Railway volume backups exist for PostgreSQL, ClickHouse, and object storage.
 - PostgreSQL PITR is healthy and a logical dump has completed a disposable restore drill.
 - The current application bundle and every current service image digest are recorded for rollback.
+
+The fresh-schema canary is necessary but not sufficient for production. Promotion also requires a
+restore-based rehearsal against representative production PostgreSQL, ClickHouse, and object-storage
+data because the inherited deployment predates the current candidate by several months.
 
 ## Canary
 
