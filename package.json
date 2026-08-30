@@ -1,0 +1,10 @@
+{
+  "name": "@uptomic/posthog-railway",
+  "private": true,
+  "scripts": {
+    "check": "bun test && bun run lock:verify",
+    "lock:resolve": "bun scripts/resolve-upstream.ts --write",
+    "lock:verify": "bun scripts/verify-lock.ts",
+    "railway:plan": "bun scripts/render-railway-plan.ts"
+  }
+}

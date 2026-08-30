@@ -1,0 +1,31 @@
+import { officialComponents, resolveGhcrImage, resolveGithubHead } from "./lib/upstream";
+import type { OfficialComponent, PosthogLock } from "./lib/upstream";
+
+const shouldWrite = process.argv.includes("--write");
+const upstreamCommit = await resolveGithubHead();
+const entries = await Promise.all(
+  Object.entries(officialComponents).map(async ([name, repository]) => [
+    name,
+    await resolveGhcrImage(repository),
+  ]),
+);
+const shortCommit = upstreamCommit.slice(0, 12);
+const lock: PosthogLock = {
+  candidateImages: {
+    main: `ghcr.io/uptomic/posthog-railway/main:sha-${shortCommit}`,
+    mcp: `ghcr.io/uptomic/posthog-railway/mcp:sha-${shortCommit}`,
+    node: `ghcr.io/uptomic/posthog-railway/node:sha-${shortCommit}`,
+  },
+  officialImages: Object.fromEntries(entries) as PosthogLock["officialImages"],
+  resolvedAt: new Date().toISOString(),
+  schemaVersion: 1,
+  upstreamCommit,
+  upstreamRepository: "PostHog/posthog",
+};
+
+const serialized = `${JSON.stringify(lock, null, 2)}\n`;
+if (shouldWrite) {
+  await Bun.write(new URL("../posthog.lock.json", import.meta.url), serialized);
+} else {
+  process.stdout.write(serialized);
+}
