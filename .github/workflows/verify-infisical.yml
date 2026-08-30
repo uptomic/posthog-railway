@@ -1,0 +1,65 @@
+name: Verify Infisical access
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify OIDC and Railway credential presence
+        env:
+          INFISICAL_DOMAIN: https://secrets.uptomic.com
+          INFISICAL_IDENTITY_ID: 0d5a1a85-0765-4d96-909b-986a54eb728e
+          INFISICAL_OIDC_AUDIENCE: https://github.com/uptomic
+          INFISICAL_WORKSPACE_ID: a2d31c74-dc3b-4e17-97b7-84bc5d3ec5fb
+        run: |
+          set -euo pipefail
+          oidc_response="$(
+            curl --fail --silent --show-error --get \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --retry 3 \
+              --retry-all-errors \
+              -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              --data-urlencode "audience=$INFISICAL_OIDC_AUDIENCE" \
+              "$ACTIONS_ID_TOKEN_REQUEST_URL"
+          )"
+          oidc_token="$(jq -er '.value | strings | select(length > 0)' <<< "$oidc_response")"
+          echo "::add-mask::$oidc_token"
+          auth_response="$(
+            jq -n \
+              --arg identityId "$INFISICAL_IDENTITY_ID" \
+              --arg jwt "$oidc_token" \
+              '{identityId:$identityId,jwt:$jwt}' \
+              | curl --fail --silent --show-error \
+                  --connect-timeout 10 \
+                  --max-time 30 \
+                  --retry 3 \
+                  --retry-all-errors \
+                  -X POST "$INFISICAL_DOMAIN/api/v1/auth/oidc-auth/login" \
+                  -H 'Content-Type: application/json' \
+                  --data-binary @-
+          )"
+          access_token="$(jq -er '.accessToken | strings | select(length > 0)' <<< "$auth_response")"
+          echo "::add-mask::$access_token"
+          secret_response="$(
+            curl --fail --silent --show-error --get \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --retry 3 \
+              --retry-all-errors \
+              -H "Authorization: Bearer $access_token" \
+              --data-urlencode "workspaceId=$INFISICAL_WORKSPACE_ID" \
+              --data-urlencode 'environment=prod' \
+              --data-urlencode 'secretPath=/' \
+              --data-urlencode 'recursive=false' \
+              --data-urlencode 'include_imports=false' \
+              "$INFISICAL_DOMAIN/api/v3/secrets/raw/RAILWAY_API_TOKEN"
+          )"
+          jq -e '.secret.secretValue | strings | length > 0' <<< "$secret_response" >/dev/null
+          echo "Infisical OIDC access verified"
