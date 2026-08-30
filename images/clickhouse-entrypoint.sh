@@ -3,6 +3,13 @@ set -eu
 
 cluster_config=/etc/clickhouse-server/config.d/default.xml
 
+: "${CLICKHOUSE_USER:?CLICKHOUSE_USER is required}"
+: "${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}"
+[ "$CLICKHOUSE_USER" = clickhouse ] || {
+    echo "CLICKHOUSE_USER must be 'clickhouse' for this Railway image" >&2
+    exit 1
+}
+
 if [ -f "$cluster_config" ]; then
     # Keep the hostname reachable from application containers while resolving
     # it locally inside ClickHouse. Current migrations require both properties:
@@ -26,5 +33,10 @@ if [ -f "$cluster_config" ]; then
                     <password from_env="CLICKHOUSE_PASSWORD" />' "$cluster_config"
     fi
 fi
+
+# The image defines both the authenticated network user and PostHog's
+# localhost-only dictionary reader. Prevent the official entrypoint from
+# replacing that complete user configuration with a single generated user.
+export CLICKHOUSE_SKIP_USER_SETUP=1
 
 exec /clickhouse-official-entrypoint.sh "$@"

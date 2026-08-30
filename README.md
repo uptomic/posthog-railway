@@ -25,7 +25,8 @@ PostHog does not publish versioned self-hosted releases. Upstream ships continuo
    The ClickHouse build also layers a narrowly scoped Railway runtime configuration: bounded thread
    pools, one wildcard listener, edge-terminated TLS, console logging, local single-node cluster
    discovery, environment-backed credentials for distributed self-connections, and a localhost-only
-   dictionary reader required by PostHog's local-single schema. Its immutable tag
+   dictionary reader required by PostHog's local-single schema alongside the authenticated
+   Railway network user. Its immutable tag
    includes a fingerprint of those build inputs so a runtime-config change cannot silently reuse an old image.
    Both images are published with provenance and SBOMs to GHCR.
 4. A successful build writes a second manifest that pins the built MCP and ClickHouse images by OCI
