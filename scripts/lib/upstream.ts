@@ -4,11 +4,29 @@ export const upstreamRegistry = "ghcr.io";
 export const officialComponents = {
   main: "posthog/posthog",
   capture: "posthog/posthog/capture",
-  "cyclotron-janitor": "posthog/posthog/cyclotron-janitor",
   "feature-flags": "posthog/posthog/feature-flags",
   livestream: "posthog/posthog/livestream",
   node: "posthog/posthog-node",
+  "personhog-replica": "posthog/posthog/personhog-replica",
+  "personhog-router": "posthog/posthog/personhog-router",
   "property-defs-rs": "posthog/posthog/property-defs-rs",
+  "sqlx-migrate": "posthog/posthog/sqlx-migrate",
+} as const;
+
+// The inherited Railway stack predates ClickHouse migration 0210. Newer PostHog
+// source makes historical migrations reference columns introduced later in the
+// same migration chain. Jump upgrades therefore advance through two exact
+// predecessor images before the release image. These are one-shot migration
+// evidence, never long-running application runtimes.
+export const migrationBridgeImages = {
+  "pre-session-replay-ai": {
+    repository: "posthog/posthog",
+    tag: "sha-84a70e4",
+  },
+  "pre-session-replay-surfacing": {
+    repository: "posthog/posthog",
+    tag: "sha-42a7cf3",
+  },
 } as const;
 
 export type OfficialComponent = keyof typeof officialComponents;
@@ -24,7 +42,11 @@ export interface PosthogLock {
   candidateImages: {
     mcp: string;
   };
+  supportingImages: {
+    gateway: string;
+  };
   officialImages: Record<OfficialComponent, LockedImage>;
+  migrationBridges: Record<keyof typeof migrationBridgeImages, LockedImage>;
   resolvedAt: string;
   schemaVersion: 1;
   upstreamCommit: string;

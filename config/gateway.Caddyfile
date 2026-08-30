@@ -1,0 +1,43 @@
+{
+	admin off
+	auto_https off
+}
+
+:3000 {
+	handle /health {
+		respond 200
+	}
+
+	@replay path /s /s/ /s/*
+	handle @replay {
+		reverse_proxy {$CAPTURE_REPLAY_INTERNAL_URL} {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	@capture path /e /e/ /e/* /i/v0 /i/v0/ /i/v0/* /i/v1/analytics/events /i/v1/analytics/events/ /batch /batch/ /batch/* /capture /capture/ /capture/* /track /track/ /engage /engage/
+	handle @capture {
+		reverse_proxy {$CAPTURE_INTERNAL_URL} {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	@flags path /flags /flags/ /flags/* /api/feature_flag/local_evaluation /api/feature_flag/local_evaluation/ /api/feature_flag/local_evaluation/*
+	handle @flags {
+		reverse_proxy {$FEATURE_FLAGS_INTERNAL_URL} {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	handle_path /livestream* {
+		reverse_proxy {$LIVESTREAM_INTERNAL_URL} {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	handle {
+		reverse_proxy {$WEB_INTERNAL_URL} {
+			header_up X-Forwarded-Proto https
+		}
+	}
+}

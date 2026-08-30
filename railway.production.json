@@ -9,6 +9,12 @@
       "imageDigest": "sha256:2f860065ded11746fcbdb1243378ebbcf1d95c60b3f8d0cccd2286824d343257",
       "serviceId": "bacb342e-f790-4234-845d-98c0bde19c99"
     },
+    "ClickHouse": {
+      "deploymentId": "73a66b4f-f43c-496e-9d5f-c04dfff22faf",
+      "image": "ghcr.io/hexatare/posthog-railway-template/clickhouse:latest",
+      "imageDigest": "sha256:9077f708e54e17a2b40d9012702a38b06368d3a90b780ccde5701fdb72236131",
+      "serviceId": "8e67992c-34d9-4398-9bb5-79d31f51d55c"
+    },
     "Cyclotron Janitor": {
       "deploymentId": "f6074911-0864-455d-a208-95e9e4be7288",
       "image": "ghcr.io/hexatare/posthog-railway-template/cyclotron-janitor:latest",

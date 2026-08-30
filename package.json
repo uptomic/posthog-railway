@@ -4,6 +4,7 @@
   "scripts": {
     "candidate:verify": "bun scripts/verify-candidate.ts",
     "check": "bun test && bun run lock:verify",
+    "gateway:smoke": "bun scripts/gateway-smoke.ts",
     "lock:resolve": "bun scripts/resolve-upstream.ts --write",
     "lock:verify": "bun scripts/verify-lock.ts",
     "railway:plan": "bun scripts/render-railway-plan.ts"
