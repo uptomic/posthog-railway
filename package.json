@@ -2,6 +2,7 @@
   "name": "@uptomic/posthog-railway",
   "private": true,
   "scripts": {
+    "candidate:verify": "bun scripts/verify-candidate.ts",
     "check": "bun test && bun run lock:verify",
     "lock:resolve": "bun scripts/resolve-upstream.ts --write",
     "lock:verify": "bun scripts/verify-lock.ts",

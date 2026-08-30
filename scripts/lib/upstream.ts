@@ -30,6 +30,16 @@ export interface PosthogLock {
   upstreamRepository: typeof upstreamRepository;
 }
 
+export interface CandidateRelease {
+  builtAt: string;
+  images: {
+    mcp: string;
+    node: string;
+  };
+  schemaVersion: 1;
+  upstreamCommit: string;
+}
+
 export function isSameRelease(left: PosthogLock, right: PosthogLock): boolean {
   const { resolvedAt: _leftResolvedAt, ...leftRelease } = left;
   const { resolvedAt: _rightResolvedAt, ...rightRelease } = right;
