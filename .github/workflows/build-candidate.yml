@@ -37,6 +37,8 @@ jobs:
         with:
           bun-version: latest
       - id: lock
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ github.event_name }}" = schedule ] || [ "${{ inputs.update_upstream }}" = true ]; then
             bun run lock:resolve

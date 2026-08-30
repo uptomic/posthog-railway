@@ -77,6 +77,15 @@ describe("immutable Node release contract", () => {
     expect(workflow.jobs.verify.steps.at(-1).run).toContain("bun scripts/node-smoke.ts");
   });
 
+  test("authenticates upstream resolution and lock validation with the existing workflow token", async () => {
+    const workflow = Bun.YAML.parse(await Bun.file(new URL("../.github/workflows/build-candidate.yml", import.meta.url)).text()) as any;
+    const lockStep = workflow.jobs.resolve.steps.find((step: any) => step.id === "lock");
+    expect(lockStep.env?.GITHUB_TOKEN).toBe("${{ github.token }}");
+    expect(lockStep.run).toContain("bun run lock:resolve");
+    expect(lockStep.run).toContain("bun run check");
+    expect(workflow.permissions).toEqual({ contents: "write", packages: "write" });
+  });
+
   test("baseline proves the exact DNS failure separately from shared-client connection failure", async () => {
     const probe = await Bun.file(new URL("./node-redis-probe.cjs", import.meta.url)).text();
     expect(probe).toContain('lookup("ipv6.railway.internal", { family: 4 })');
