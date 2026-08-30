@@ -17,6 +17,7 @@ jobs:
   resolve:
     runs-on: ubuntu-latest
     outputs:
+      changed: ${{ steps.lock.outputs.changed }}
       commit: ${{ steps.lock.outputs.commit }}
       short: ${{ steps.lock.outputs.short }}
     steps:
@@ -29,6 +30,11 @@ jobs:
           bun run lock:resolve
           bun run check
           commit="$(jq -r .upstreamCommit posthog.lock.json)"
+          if git diff --quiet -- posthog.lock.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
           echo "short=${commit:0:12}" >> "$GITHUB_OUTPUT"
       - name: Commit a changed upstream lock
@@ -44,6 +50,7 @@ jobs:
 
   build:
     needs: resolve
+    if: ${{ needs.resolve.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

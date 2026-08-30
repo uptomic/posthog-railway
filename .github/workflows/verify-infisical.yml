@@ -31,6 +31,14 @@ jobs:
           )"
           oidc_token="$(jq -er '.value | strings | select(length > 0)' <<< "$oidc_response")"
           echo "::add-mask::$oidc_token"
+          token_claims="$(
+            cut -d. -f2 <<< "$oidc_token" \
+              | tr '_-' '/+' \
+              | awk '{ pad=(4-length($0)%4)%4; printf "%s", $0; while (pad--) printf "=" }' \
+              | base64 --decode \
+              | jq '{sub,aud,iss,ref,event_name,repository,repository_owner,repository_visibility,ref_protected,workflow_ref}'
+          )"
+          echo "OIDC claims: $token_claims"
           auth_response="$(
             jq -n \
               --arg identityId "$INFISICAL_IDENTITY_ID" \
