@@ -1,6 +1,6 @@
 {
   "candidateImages": {
-    "mcp": "ghcr.io/uptomic/posthog-railway/mcp:sha-a4206631b834"
+    "mcp": "ghcr.io/uptomic/posthog-railway/mcp:sha-da93d8bbd71e"
   },
   "officialImages": {
     "main": {
@@ -53,8 +53,8 @@
       "source": "https://github.com/PostHog/posthog"
     }
   },
-  "resolvedAt": "2026-08-30T11:11:59.151Z",
+  "resolvedAt": "2026-08-30T12:10:05.938Z",
   "schemaVersion": 1,
-  "upstreamCommit": "a4206631b834fab0c4683f8be8ac2412b23c5cb2",
+  "upstreamCommit": "da93d8bbd71e23d49a8372ec43b4a4c7f75c1316",
   "upstreamRepository": "PostHog/posthog"
 }
