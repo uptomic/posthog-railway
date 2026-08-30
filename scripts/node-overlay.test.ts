@@ -84,6 +84,16 @@ describe("immutable Node release contract", () => {
     expect(probe).toContain('await probe("ipv6.railway.internal", 6, 6)');
     expect(probe).not.toContain('assert.rejects(probe(');
   });
+
+  test("uses a multi-platform Redis fixture, verifies its selected architecture and retains failure diagnostics", async () => {
+    const smoke = await Bun.file(new URL("./node-smoke.ts", import.meta.url)).text();
+    expect(smoke).toContain("sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf");
+    expect(smoke).not.toContain("sha256:f8d15882ba108587477ce13c00ab0551933a84138427b7cc9abadfbe45ffd973");
+    expect(smoke).toContain('redisConfig.Architecture !== baseConfig.Architecture');
+    expect(smoke).toContain('["logs", "--tail", "60", container]');
+    expect(smoke).toContain('"{{json .State}}"');
+    expect(smoke).not.toContain('["run", "--rm", "-d", "--name", container');
+  });
 });
 
 describe("guarded shared-client overlay", () => {

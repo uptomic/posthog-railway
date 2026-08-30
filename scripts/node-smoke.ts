@@ -2,10 +2,11 @@ const [image, baseImage, baseRevision, fingerprintSha256] = Bun.argv.slice(2);
 if (!image || !baseImage || !baseRevision || !fingerprintSha256) {
   throw new Error("Usage: node-smoke.ts IMAGE BASE_IMAGE BASE_REVISION OVERLAY_SHA256");
 }
-const redisImage = "docker.io/library/redis@sha256:f8d15882ba108587477ce13c00ab0551933a84138427b7cc9abadfbe45ffd973";
+// Multi-platform Redis 7.4.11-alpine index, not the local ARM64 child manifest.
+const redisImage = "docker.io/library/redis@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf";
 const container = `posthog-node-redis-proof-${Date.now()}`;
 
-async function docker(args: string[], input?: string): Promise<string> {
+async function docker(args: string[], input?: string, includeStderr = false): Promise<string> {
   const child = Bun.spawn(["docker", ...args], {
     stdout: "pipe", stderr: "pipe", stdin: input === undefined ? "ignore" : "pipe",
   });
@@ -17,7 +18,7 @@ async function docker(args: string[], input?: string): Promise<string> {
     child.exited, new Response(child.stdout).text(), new Response(child.stderr).text(),
   ]);
   if (exit !== 0) throw new Error(`Disposable Node proof failed (${args[0]}): ${stdout}\n${stderr}`);
-  return stdout;
+  return includeStderr ? `${stdout}\n${stderr}` : stdout;
 }
 
 await docker(["pull", baseImage]);
@@ -40,12 +41,19 @@ if (JSON.stringify(provenance) !== JSON.stringify({ baseImage, baseRevision, fin
   throw new Error("Node overlay runtime provenance does not match build inputs");
 }
 
-await docker(["run", "--rm", "-d", "--name", container,
+const redisPlatform = `${baseConfig.Os}/${baseConfig.Architecture}`;
+await docker(["pull", "--platform", redisPlatform, redisImage]);
+const [redisConfig] = JSON.parse(await docker(["image", "inspect", redisImage]));
+if (redisConfig.Os !== baseConfig.Os || redisConfig.Architecture !== baseConfig.Architecture) {
+  throw new Error("Disposable Redis fixture platform does not match the exact Node image");
+}
+await docker(["create", "--platform", redisPlatform, "--name", container,
   "--add-host", "ipv6.railway.internal=::1",
   "--add-host", "ipv4.railway.internal=127.0.0.1",
   "--add-host", "unrelated.example.test=127.0.0.1", redisImage,
   "redis-server", "--bind", "0.0.0.0", "::", "--save", "", "--appendonly", "no"]);
 try {
+  await docker(["start", container]);
   let ready = false;
   for (let attempt = 0; attempt < 20; attempt++) {
     try {
@@ -63,6 +71,13 @@ try {
     ], script);
     console.log(result.trim());
   }
+} catch (error) {
+  // The fixture is isolated, has no credentials and must survive until diagnostics
+  // are collected; --rm would erase exec-format/startup failures before inspection.
+  const state = await docker(["inspect", "--format", "{{json .State}}", container]).catch(() => "unavailable");
+  const logs = await docker(["logs", "--tail", "60", container], undefined, true).catch(() => "unavailable");
+  console.error(`Disposable Redis state: ${state.slice(0, 2000)}\nLogs: ${logs.slice(-12000)}`);
+  throw error;
 } finally {
   await docker(["rm", "--force", container]);
 }
