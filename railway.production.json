@@ -1,0 +1,79 @@
+{
+  "capturedAt": "2026-08-30T08:26:00Z",
+  "environmentId": "bfcc82db-7164-4dfa-b13d-e5e3aee9bcfa",
+  "projectId": "9d67dbed-0595-4183-8647-77d21acaec41",
+  "services": {
+    "Capture": {
+      "deploymentId": "1267f159-0d39-4eca-bd72-677188dbdf96",
+      "image": "ghcr.io/hexatare/posthog-railway-template/capture:latest",
+      "imageDigest": "sha256:2f860065ded11746fcbdb1243378ebbcf1d95c60b3f8d0cccd2286824d343257",
+      "serviceId": "bacb342e-f790-4234-845d-98c0bde19c99"
+    },
+    "Cyclotron Janitor": {
+      "deploymentId": "f6074911-0864-455d-a208-95e9e4be7288",
+      "image": "ghcr.io/hexatare/posthog-railway-template/cyclotron-janitor:latest",
+      "imageDigest": "sha256:0773c0379547e882dece9d895223c2d6a1020ac41a477d15805144a0e29417ac",
+      "serviceId": "4cad1e63-8a4b-4557-ade5-c228970315fd"
+    },
+    "Feature Flags": {
+      "deploymentId": "466d0105-5cd0-44ad-983a-651aac5324d0",
+      "image": "ghcr.io/hexatare/posthog-railway-template/feature-flags:latest",
+      "imageDigest": "sha256:3ca005cbe5a27038d2cdf71ac037c4c34f561d413ae586c0587804a801483dac",
+      "serviceId": "20632709-dda4-4b9a-92fc-0d7ceaa13ef7"
+    },
+    "Livestream": {
+      "deploymentId": "b9f9de9f-7fe4-429b-8a5f-74c31d09a3ee",
+      "image": "ghcr.io/hexatare/posthog-railway-template/livestream:latest",
+      "imageDigest": "sha256:6fb5d5ab49d774f10c01ee97663b2d105ceeaa31097c088d0a31720ca12b6e46",
+      "serviceId": "8898d374-f027-4fa5-8987-0a6809870c0a"
+    },
+    "Plugins": {
+      "deploymentId": "ee8d55ad-b7b8-49ea-8573-4df23d3c932c",
+      "image": "ghcr.io/hexatare/posthog-railway-template/plugins:latest",
+      "imageDigest": "sha256:462332d5d8caf2b105e371ff78218101911f4260a8fb7349a298b7b429fabd80",
+      "serviceId": "f448e571-2178-42ae-92cb-437958a0643b"
+    },
+    "PostHog MCP": {
+      "deploymentId": "171ffead-0f85-45fd-97aa-e53b451a2f26",
+      "image": null,
+      "imageDigest": "sha256:d60862270c42ec98bb637859eeac68cfe08f924b4f27b35aad9c67cfa00e9d7f",
+      "serviceId": "1ba88c08-369e-491a-9c8b-4c0df9f40252"
+    },
+    "Property Defs RS": {
+      "deploymentId": "161ee0a2-5272-44fb-b273-621dfcdc769e",
+      "image": "ghcr.io/hexatare/posthog-railway-template/property-defs-rs:latest",
+      "imageDigest": "sha256:e46f3d98c0bd689d3f3c17f9d83ff6a10297751b118366cb1b11f97e86ba6f4d",
+      "serviceId": "6976dff4-e51e-4e83-b6bd-988969528c40"
+    },
+    "Replay Capture": {
+      "deploymentId": "c5c7a482-9a33-4da2-a690-9ec20dc8949c",
+      "image": "ghcr.io/hexatare/posthog-railway-template/replay-capture:latest",
+      "imageDigest": "sha256:f5dd335519583f5e1d53430e6cda92a282abb139f6e87f998893edcf8f6668b2",
+      "serviceId": "2584cdac-ca87-4f01-8020-8d2400a59484"
+    },
+    "Temporal Django Worker": {
+      "deploymentId": "b83645ba-78db-4e4f-9152-afb1e071dd68",
+      "image": "ghcr.io/hexatare/posthog-railway-template/temporal-django-worker:latest",
+      "imageDigest": "sha256:5cf273ac9b921ec60db7a94999b4ae07949d6d401ed351819579e1aef7ad8b09",
+      "serviceId": "3782b5ee-ce87-4a50-a126-5f671a5b56dc"
+    },
+    "Web": {
+      "deploymentId": "6dec46e9-bd1a-439d-bdf0-ccbf3875b25c",
+      "image": "ghcr.io/hexatare/posthog-railway-template/web:latest",
+      "imageDigest": "sha256:b0520c2d75b1b994c6fde24a85a4f974aafae8d8567d35c130705fc62ba2c078",
+      "serviceId": "ddc5c1eb-b716-491e-842e-be20adb7d79e"
+    },
+    "Worker": {
+      "deploymentId": "265982fe-ce6b-4d29-95e2-a4d5915cb5fd",
+      "image": "ghcr.io/hexatare/posthog-railway-template/worker:latest",
+      "imageDigest": "sha256:0b6a89672203e14dea66c1f6a72ee2df3b2ed6c4f2311932f3c2fed5e225145d",
+      "serviceId": "6187b819-0c48-4ed9-a23f-d280d583be98"
+    },
+    "posthog-ingestion": {
+      "deploymentId": "78fefd89-2708-4c32-ba77-12caae779887",
+      "image": "ghcr.io/hexatare/posthog-railway-template/plugins:latest",
+      "imageDigest": "sha256:462332d5d8caf2b105e371ff78218101911f4260a8fb7349a298b7b429fabd80",
+      "serviceId": "6ea91af9-3e48-4496-affc-3bb0aa72f0c4"
+    }
+  }
+}

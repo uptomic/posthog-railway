@@ -36,6 +36,14 @@ PostHog does not publish versioned self-hosted releases. Upstream ships continuo
 - Roll back application images as one bundle. Restore data only when migrations are not backward
   compatible and the rollback runbook explicitly requires it.
 
+## Infisical boundary
+
+Production promotion uses the dedicated `posthog-railway-release` machine identity in Career
+Mentor's existing Infisical project. GitHub authenticates with OIDC from the private
+`uptomic/posthog-railway` repository on `main`; the identity has the built-in `no-access` role plus
+one additional privilege that can only describe and read `RAILWAY_API_TOKEN` in `prod` at `/`.
+It cannot list or read any other Career Mentor secret.
+
 ## Current baseline
 
 The inherited Railway template was built on 2026-01-31 from PostHog commit
