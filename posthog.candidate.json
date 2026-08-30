@@ -1,8 +1,8 @@
 {
-  "builtAt": "2026-08-30T09:04:17.368Z",
+  "builtAt": "2026-08-30T10:04:39.873Z",
   "images": {
-    "mcp": "ghcr.io/uptomic/posthog-railway/mcp@sha256:143642c362fe4d85f26d56d4b81c310f8fe6b32a1bc7df196641dcc9eecf25e2"
+    "mcp": "ghcr.io/uptomic/posthog-railway/mcp@sha256:b3f1e0975d100747b527e31eb9fd43a6dff34af396c3cc718c20dc1338229f68"
   },
   "schemaVersion": 1,
-  "upstreamCommit": "d29386663d1c52625552dbb8c47754851dd9e425"
+  "upstreamCommit": "c6e2e5834bcf1cf3176c4f68356c7ce1bc967ee0"
 }
