@@ -91,13 +91,62 @@ jobs:
           cache-from: type=gha,scope=posthog-${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=posthog-${{ matrix.component }}
 
+  build-clickhouse:
+    needs: resolve
+    if: ${{ needs.resolve.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: PostHog/posthog
+          ref: ${{ needs.resolve.outputs.commit }}
+          path: posthog
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: version
+        name: Resolve the candidate ClickHouse version
+        run: |
+          version="$(sed -nE 's/.*clickhouse\/clickhouse-server:([^} ]+).*/\1/p' posthog/docker-compose.base.yml | head -n 1)"
+          test -n "$version"
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+      - id: existing
+        name: Reuse an existing immutable candidate
+        env:
+          EXPECTED_SHORT: ${{ needs.resolve.outputs.short }}
+        run: |
+          image="ghcr.io/uptomic/posthog-railway/clickhouse:sha-${EXPECTED_SHORT}"
+          if docker manifest inspect "$image" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        if: ${{ steps.existing.outputs.exists != 'true' }}
+        with:
+          context: .
+          file: images/clickhouse.Dockerfile
+          push: true
+          provenance: true
+          sbom: true
+          tags: ghcr.io/uptomic/posthog-railway/clickhouse:sha-${{ needs.resolve.outputs.short }}
+          build-args: |
+            CLICKHOUSE_BASE_IMAGE=clickhouse/clickhouse-server:${{ steps.version.outputs.value }}
+            COMMIT_HASH=${{ needs.resolve.outputs.commit }}
+          cache-from: type=gha,scope=posthog-clickhouse
+          cache-to: type=gha,mode=max,scope=posthog-clickhouse
+
   verify:
-    needs: [resolve, build]
+    needs: [resolve, build, build-clickhouse]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       matrix:
-        component: [mcp]
+        component: [clickhouse, mcp]
     steps:
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
@@ -112,8 +161,13 @@ jobs:
         run: |
           image="ghcr.io/uptomic/posthog-railway/${COMPONENT}:sha-${EXPECTED_SHORT}"
           docker pull "$image"
+          case "$COMPONENT" in
+            clickhouse) commit_file=/etc/uptomic-posthog-commit ;;
+            mcp) commit_file=/code/commit.txt ;;
+            *) exit 1 ;;
+          esac
           docker run --rm --entrypoint sh "$image" -c \
-            'test "$(cat /code/commit.txt)" = "$1"' _ "$EXPECTED_COMMIT"
+            'test "$(cat "$1")" = "$2"' _ "$commit_file" "$EXPECTED_COMMIT"
           docker image inspect "$image" --format '{{json .RepoDigests}}'
 
   finalize:
@@ -143,7 +197,11 @@ jobs:
           mcp_digest="$(docker buildx imagetools inspect \
             "ghcr.io/uptomic/posthog-railway/mcp:sha-${EXPECTED_SHORT}" \
             --format '{{json .Manifest}}' | jq -er .digest)"
+          clickhouse_digest="$(docker buildx imagetools inspect \
+            "ghcr.io/uptomic/posthog-railway/clickhouse:sha-${EXPECTED_SHORT}" \
+            --format '{{json .Manifest}}' | jq -er .digest)"
           export MCP_DIGEST="$mcp_digest"
+          export CLICKHOUSE_DIGEST="$clickhouse_digest"
           bun scripts/write-candidate.ts
           bun run candidate:verify
       - name: Commit the candidate manifest

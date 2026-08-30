@@ -10,7 +10,7 @@ PostHog does not publish versioned self-hosted releases. Upstream ships continuo
 - the exact OCI digest, creation time, and embedded upstream revision of every published component
   image;
 - PostHog's official `main` and `posthog-node` images locked by digest, plus an Uptomic-built `mcp`
-  image from the exact release commit;
+  image and an Uptomic-built ClickHouse image from the exact release commit;
 - the Railway service-to-image and start-command plan;
 - completed migration, API, ingestion, UI, MCP, and rollback checks.
 
@@ -21,8 +21,10 @@ PostHog does not publish versioned self-hosted releases. Upstream ships continuo
    that are not ancestors of the locked upstream commit.
 3. The scheduled GitHub workflow locks PostHog's official application digests, rejects a
    `posthog-node` publication more than 72 hours old, builds `mcp` from the exact locked commit, and
-   publishes an immutable SHA tag with provenance and an SBOM to GHCR.
-4. A successful build writes a second manifest that pins the built MCP image by OCI digest.
+   rebuilds ClickHouse from PostHog's pinned ClickHouse base plus that commit's config and UDF assets.
+   Both images are published as immutable SHA tags with provenance and SBOMs to GHCR.
+4. A successful build writes a second manifest that pins the built MCP and ClickHouse images by OCI
+   digest.
 5. `bun run railway:plan` renders the coordinated application-service update. It does not apply it.
 6. Production promotion requires verified volume backups, migration completion, a canary smoke run,
    and explicit application of the complete bundle. Never update PostHog services one at a time.

@@ -34,6 +34,7 @@ export interface PosthogLock {
 export interface CandidateRelease {
   builtAt: string;
   images: {
+    clickhouse: string;
     mcp: string;
   };
   schemaVersion: 1;
