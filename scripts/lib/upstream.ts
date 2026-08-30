@@ -80,12 +80,18 @@ async function jsonResponse<T>(response: Response, label: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+function githubHeaders(): Record<string, string> {
+  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
+  return {
+    Accept: "application/vnd.github+json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    "User-Agent": "uptomic-posthog-railway",
+  };
+}
+
 export async function resolveGithubHead(): Promise<string> {
   const response = await fetch(`https://api.github.com/repos/${upstreamRepository}/commits/master`, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      "User-Agent": "uptomic-posthog-railway",
-    },
+    headers: githubHeaders(),
   });
   const payload = await jsonResponse<{ sha?: string }>(response, "GitHub upstream head");
   if (!payload.sha || !/^[0-9a-f]{40}$/.test(payload.sha)) {
@@ -101,10 +107,7 @@ export async function isAncestor(revision: string, head: string): Promise<boolea
   const response = await fetch(
     `https://api.github.com/repos/${upstreamRepository}/compare/${revision}...${head}`,
     {
-      headers: {
-        Accept: "application/vnd.github+json",
-        "User-Agent": "uptomic-posthog-railway",
-      },
+      headers: githubHeaders(),
     },
   );
   const payload = await jsonResponse<{ status?: string }>(response, `GitHub compare ${revision}`);
