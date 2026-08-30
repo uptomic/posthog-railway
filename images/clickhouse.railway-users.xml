@@ -7,7 +7,8 @@
          user created by the official entrypoint. -->
     <users>
         <default>
-            <password replace="replace" />
+            <password remove="remove" />
+            <no_password />
             <networks replace="replace">
                 <ip>127.0.0.1</ip>
                 <ip>::1</ip>
