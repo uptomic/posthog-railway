@@ -1,5 +1,5 @@
 {
-  "builtAt": "2026-08-30T20:27:01.890Z",
+  "builtAt": "2026-08-30T21:13:11.581Z",
   "clickhouseBuild": {
     "baseImage": "docker.io/clickhouse/clickhouse-server@sha256:95f7cbf466dba734947775eb74808a13a3558e4398666ea6b1d992af85b9740d",
     "baseVersion": "26.6.2.158",
@@ -8,12 +8,12 @@
   "images": {
     "clickhouse": "ghcr.io/uptomic/posthog-railway/clickhouse@sha256:a554052a426d42dbc8cf9581f4a90af480fb635bc3309ee6f7cc41cb65242805",
     "mcp": "ghcr.io/uptomic/posthog-railway/mcp@sha256:f3feb2b387ec31e4a5d8e18c1da5a62561b85363f546b6daea98d39cab01c617",
-    "node": "ghcr.io/uptomic/posthog-railway/node@sha256:646fbdbda1f444040df0521e759cd6711916c4b970bbd0c6312e722b1aaf42e1"
+    "node": "ghcr.io/uptomic/posthog-railway/node@sha256:a8b98b54245b44463f88b4e5dc8de511d15f265219ebd695192ed91d06e0e943"
   },
   "nodeOverlay": {
     "baseImage": "ghcr.io/posthog/posthog-node@sha256:e526ec11a5fe7cb1d60037a5977eb045c3fec13595f87b4eea01db96dfff076c",
     "baseRevision": "49c2532424f7f7e6825a0cd5ef61c4ba7bc212f7",
-    "fingerprintSha256": "af61b6831cc8d55d56aa01dd9d8b61c3e4d88d816e04ca2a90fad10952363a89"
+    "fingerprintSha256": "d0cccf37a3610e0b2f95b1cea50c9e425b524fa150479b0735d9e95ff4a1b7e9"
   },
   "schemaVersion": 1,
   "upstreamCommit": "da93d8bbd71e23d49a8372ec43b4a4c7f75c1316"
