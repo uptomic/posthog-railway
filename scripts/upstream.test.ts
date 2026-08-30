@@ -11,6 +11,7 @@ describe("PostHog release bundle ownership", () => {
       "feature-flags",
       "livestream",
       "main",
+      "node",
       "property-defs-rs",
     ]);
   });

@@ -18,7 +18,14 @@ for (const [name, repository] of Object.entries(officialComponents)) {
     throw new Error(`PostHog ${name} image revision is not an ancestor of the locked upstream`);
   }
 }
-const immutableCandidate = new RegExp(`^ghcr\\.io/uptomic/posthog-railway/(node|mcp):sha-${lock.upstreamCommit.slice(0, 12)}$`);
+const nodeCreatedAt = Date.parse(lock.officialImages.node.createdAt);
+const resolvedAt = Date.parse(lock.resolvedAt);
+if (Number.isNaN(nodeCreatedAt) || resolvedAt - nodeCreatedAt > 72 * 60 * 60 * 1000) {
+  throw new Error("Official PostHog Node image is more than 72 hours behind the locked release");
+}
+const immutableCandidate = new RegExp(
+  `^ghcr\\.io/uptomic/posthog-railway/mcp:sha-${lock.upstreamCommit.slice(0, 12)}$`,
+);
 for (const image of Object.values(lock.candidateImages)) {
   if (!immutableCandidate.test(image)) {
     throw new Error(`Candidate image is not tied to the locked upstream commit: ${image}`);

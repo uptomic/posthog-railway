@@ -18,7 +18,6 @@ const shortCommit = upstreamCommit.slice(0, 12);
 const candidate: PosthogLock = {
   candidateImages: {
     mcp: `ghcr.io/uptomic/posthog-railway/mcp:sha-${shortCommit}`,
-    node: `ghcr.io/uptomic/posthog-railway/node:sha-${shortCommit}`,
   },
   officialImages: Object.fromEntries(entries) as PosthogLock["officialImages"],
   resolvedAt: new Date().toISOString(),

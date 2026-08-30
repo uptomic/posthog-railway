@@ -1,0 +1,8 @@
+{
+  "builtAt": "2026-08-30T09:04:17.368Z",
+  "images": {
+    "mcp": "ghcr.io/uptomic/posthog-railway/mcp@sha256:143642c362fe4d85f26d56d4b81c310f8fe6b32a1bc7df196641dcc9eecf25e2"
+  },
+  "schemaVersion": 1,
+  "upstreamCommit": "d29386663d1c52625552dbb8c47754851dd9e425"
+}

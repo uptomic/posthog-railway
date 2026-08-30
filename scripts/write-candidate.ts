@@ -3,7 +3,6 @@ import type { CandidateRelease } from "./lib/upstream";
 const digestPattern = /^sha256:[0-9a-f]{64}$/;
 const commit = process.env.EXPECTED_COMMIT;
 const mcpDigest = process.env.MCP_DIGEST;
-const nodeDigest = process.env.NODE_DIGEST;
 
 if (!commit || !/^[0-9a-f]{40}$/.test(commit)) {
   throw new Error("EXPECTED_COMMIT must be a full Git commit SHA");
@@ -11,15 +10,11 @@ if (!commit || !/^[0-9a-f]{40}$/.test(commit)) {
 if (!mcpDigest || !digestPattern.test(mcpDigest)) {
   throw new Error("MCP_DIGEST must be an OCI sha256 digest");
 }
-if (!nodeDigest || !digestPattern.test(nodeDigest)) {
-  throw new Error("NODE_DIGEST must be an OCI sha256 digest");
-}
 
 const release: CandidateRelease = {
   builtAt: new Date().toISOString(),
   images: {
     mcp: `ghcr.io/uptomic/posthog-railway/mcp@${mcpDigest}`,
-    node: `ghcr.io/uptomic/posthog-railway/node@${nodeDigest}`,
   },
   schemaVersion: 1,
   upstreamCommit: commit,

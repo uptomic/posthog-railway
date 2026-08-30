@@ -7,12 +7,14 @@ export const officialComponents = {
   "cyclotron-janitor": "posthog/posthog/cyclotron-janitor",
   "feature-flags": "posthog/posthog/feature-flags",
   livestream: "posthog/posthog/livestream",
+  node: "posthog/posthog-node",
   "property-defs-rs": "posthog/posthog/property-defs-rs",
 } as const;
 
 export type OfficialComponent = keyof typeof officialComponents;
 
 export interface LockedImage {
+  createdAt: string;
   digest: string;
   image: string;
   revision: string;
@@ -21,7 +23,6 @@ export interface LockedImage {
 export interface PosthogLock {
   candidateImages: {
     mcp: string;
-    node: string;
   };
   officialImages: Record<OfficialComponent, LockedImage>;
   resolvedAt: string;
@@ -34,7 +35,6 @@ export interface CandidateRelease {
   builtAt: string;
   images: {
     mcp: string;
-    node: string;
   };
   schemaVersion: 1;
   upstreamCommit: string;
@@ -66,6 +66,7 @@ interface RegistryManifest {
 }
 
 interface ImageConfig {
+  created?: string;
   config?: {
     Labels?: Record<string, string>;
   };
@@ -158,12 +159,20 @@ export async function resolveGhcrImage(repository: string, tag = "master"): Prom
     `GHCR image config ${repository}:${tag}`,
   );
   const labels = config.config?.Labels ?? {};
+  const createdAt = config.created;
   const revision = labels["org.opencontainers.image.revision"];
   const source = labels["org.opencontainers.image.source"];
-  if (!revision || !/^[0-9a-f]{40}$/.test(revision) || source !== "https://github.com/PostHog/posthog") {
+  if (
+    !createdAt ||
+    Number.isNaN(Date.parse(createdAt)) ||
+    !revision ||
+    !/^[0-9a-f]{40}$/.test(revision) ||
+    source !== "https://github.com/PostHog/posthog"
+  ) {
     throw new Error(`GHCR image ${repository}:${tag} has invalid upstream provenance`);
   }
   return {
+    createdAt,
     digest,
     image: `${upstreamRegistry}/${repository}@${digest}`,
     revision,

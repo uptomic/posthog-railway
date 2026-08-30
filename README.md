@@ -7,9 +7,10 @@ PostHog does not publish versioned self-hosted releases. Upstream ships continuo
 `PostHog/posthog` `master`, so an Uptomic release is defined by one immutable bundle:
 
 - the upstream Git commit;
-- the exact OCI digest and embedded upstream revision of every published component image;
-- PostHog's official `main` image locked by digest and Uptomic-built `node` and `mcp` images from
-  that same commit;
+- the exact OCI digest, creation time, and embedded upstream revision of every published component
+  image;
+- PostHog's official `main` and `posthog-node` images locked by digest, plus an Uptomic-built `mcp`
+  image from the exact release commit;
 - the Railway service-to-image and start-command plan;
 - completed migration, API, ingestion, UI, MCP, and rollback checks.
 
@@ -18,10 +19,12 @@ PostHog does not publish versioned self-hosted releases. Upstream ships continuo
 1. `bun run lock:resolve` resolves current upstream `master` and official component image digests.
 2. `bun run check` rejects mutable tags, unknown sources, malformed digests, or component revisions
    that are not ancestors of the locked upstream commit.
-3. The scheduled GitHub workflow locks PostHog's official `main` digest, builds candidate `node` and
-   `mcp` images from the exact locked commit, and publishes immutable SHA tags to GHCR.
-4. `bun run railway:plan` renders the coordinated application-service update. It does not apply it.
-5. Production promotion requires verified volume backups, migration completion, a canary smoke run,
+3. The scheduled GitHub workflow locks PostHog's official application digests, rejects a
+   `posthog-node` publication more than 72 hours old, builds `mcp` from the exact locked commit, and
+   publishes an immutable SHA tag with provenance and an SBOM to GHCR.
+4. A successful build writes a second manifest that pins the built MCP image by OCI digest.
+5. `bun run railway:plan` renders the coordinated application-service update. It does not apply it.
+6. Production promotion requires verified volume backups, migration completion, a canary smoke run,
    and explicit application of the complete bundle. Never update PostHog services one at a time.
 
 ## Safety rules
