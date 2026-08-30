@@ -1,7 +1,12 @@
 {
-  "builtAt": "2026-08-30T18:31:44.143Z",
+  "builtAt": "2026-08-30T19:05:02.171Z",
+  "clickhouseBuild": {
+    "baseImage": "docker.io/clickhouse/clickhouse-server@sha256:95f7cbf466dba734947775eb74808a13a3558e4398666ea6b1d992af85b9740d",
+    "baseVersion": "26.6.2.158",
+    "fingerprintSha256": "94c5facf01c1619101b826f02b93a5f7f15a9d02e78ba9fb8f2adfa51b81db73"
+  },
   "images": {
-    "clickhouse": "ghcr.io/uptomic/posthog-railway/clickhouse@sha256:3217cd594679b7ce8d002f06082746d8c942dcecd9542e495fe0e255f73c37b4",
+    "clickhouse": "ghcr.io/uptomic/posthog-railway/clickhouse@sha256:d240f6f0283447b4725aae6e2cc38bd05cbe574d9338666fc44fbf372763e50d",
     "mcp": "ghcr.io/uptomic/posthog-railway/mcp@sha256:f3feb2b387ec31e4a5d8e18c1da5a62561b85363f546b6daea98d39cab01c617",
     "node": "ghcr.io/uptomic/posthog-railway/node@sha256:646fbdbda1f444040df0521e759cd6711916c4b970bbd0c6312e722b1aaf42e1"
   },
