@@ -36,7 +36,7 @@
       "source": "https://github.com/PostHog/posthog"
     }
   },
-  "resolvedAt": "2026-08-30T08:06:49.158Z",
+  "resolvedAt": "2026-08-30T08:10:05.607Z",
   "schemaVersion": 1,
   "upstreamCommit": "04bf0d56b2ba539fd64ddb353554e65abedafa77",
   "upstreamRepository": "PostHog/posthog"
