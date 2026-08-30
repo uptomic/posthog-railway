@@ -25,17 +25,56 @@ export function calibrateBufferPool(current: number, active: number): number {
   return next;
 }
 
-export function saturationRun(rows: Array<{ second: number; active: number; scheduled: number }>): { samples: number; spanMs: number } {
-  let longest = 0;
+export interface SchedulerSample { atMs: number; active: number; scheduled: number; queryThreads: number }
+const schedulerGaugeNames = ["GlobalThread", "GlobalThreadActive", "GlobalThreadScheduled", "Query", "QueryThread"] as const;
+export type SchedulerMetrics = Record<typeof schedulerGaugeNames[number], number>;
+
+export function parseSchedulerMetrics(body: string): SchedulerMetrics {
+  const metrics: Partial<SchedulerMetrics> = {};
+  for (const line of body.split("\n")) {
+    if (line.startsWith("#")) continue;
+    const name = schedulerGaugeNames.find(key => line.startsWith(`ClickHouseMetrics_${key} `)
+      || line.startsWith(`ClickHouseMetrics_${key}{`));
+    if (!name) continue;
+    assert.equal(metrics[name], undefined, `Duplicate scheduler gauge ${name}`);
+    const match = line.match(new RegExp(`^ClickHouseMetrics_${name} ([0-9]+)$`));
+    assert.ok(match, `Invalid scheduler gauge ${name}`);
+    const value = Number(match[1]);
+    assert.ok(Number.isSafeInteger(value), `Invalid scheduler gauge ${name}`);
+    metrics[name] = value;
+  }
+  assert.ok(schedulerGaugeNames.every(name => metrics[name] !== undefined), "Incomplete direct scheduler metrics");
+  return metrics as SchedulerMetrics;
+}
+
+export async function sampleScheduler(read: () => Promise<SchedulerMetrics>, shouldStop: () => boolean, intervalMs = 500): Promise<SchedulerSample[]> {
+  const samples: SchedulerSample[] = [];
+  while (!shouldStop()) {
+    const started = performance.now();
+    const metrics = await read(); // Failed observations throw; never synthesize zeros or repeat stale values.
+    samples.push({ atMs: performance.now(), active: metrics.GlobalThreadActive,
+      scheduled: metrics.GlobalThreadScheduled, queryThreads: metrics.QueryThread });
+    await Bun.sleep(Math.max(0, intervalMs - (performance.now() - started)));
+  }
+  return samples;
+}
+
+export function saturationRun(rows: Array<{ atMs: number; active: number; scheduled: number }>): { samples: number; spanMs: number } {
+  let longest = { samples: 0, spanMs: 0 };
   let run = 0;
+  let runStart = 0;
   let previous = -Infinity;
   for (const row of rows) {
+    assert.ok(Number.isFinite(row.atMs) && row.atMs > previous, "Non-monotonic scheduler observation");
     const saturated = row.active === 512 && row.scheduled > 512;
-    run = saturated ? (row.second === previous + 1 ? run + 1 : 1) : 0;
-    longest = Math.max(longest, run);
-    previous = row.second;
+    if (!saturated) run = 0;
+    else if (run && row.atMs - previous <= 1500) run++;
+    else { run = 1; runStart = row.atMs; }
+    const spanMs = run ? row.atMs - runStart : 0;
+    if (run > 0 && (spanMs > longest.spanMs || (spanMs === longest.spanMs && run > longest.samples))) longest = { samples: run, spanMs };
+    previous = row.atMs;
   }
-  return { samples: longest, spanMs: Math.max(0, longest - 1) * 1000 };
+  return longest;
 }
 
 export function maximumOverlap(intervals: Array<{ started: number; finished: number }>, censoredAt: number): number {

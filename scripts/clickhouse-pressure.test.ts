@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { assertPressureReceipt, calibrateBufferPool, maximumOverlap, saturationRun, type PressureReceipt } from "./lib/clickhouse-pressure";
+import { assertPressureReceipt, calibrateBufferPool, maximumOverlap, parseSchedulerMetrics, sampleScheduler, saturationRun, type PressureReceipt } from "./lib/clickhouse-pressure";
 
 const green: PressureReceipt = { kind: "candidate", baselineActive: 480, peakPids: 890, pidLimitEvents: 0,
   oomKills: 0, correctQueries: 6, watchdogFailures: 0, saturatedSamples: 0, peakActive: 590,
@@ -34,11 +34,82 @@ test("fixture-only buffer calibration targets production's observed occupancy an
   expect(() => calibrateBufferPool(16, Number.NaN)).toThrow();
 });
 
-test("saturation requires consecutive one-second samples, not unrelated spikes", () => {
-  expect(saturationRun([{ second: 1, active: 512, scheduled: 520 }, { second: 2, active: 512, scheduled: 530 },
-    { second: 3, active: 512, scheduled: 540 }])).toEqual({ samples: 3, spanMs: 2000 });
-  expect(saturationRun([{ second: 1, active: 512, scheduled: 520 }, { second: 3, active: 512, scheduled: 530 },
-    { second: 5, active: 512, scheduled: 540 }])).toEqual({ samples: 1, spanMs: 0 });
+test("saturation uses actual sample times without interpolating missing observations", () => {
+  expect(saturationRun([{ atMs: 1000, active: 512, scheduled: 520 }, { atMs: 2010, active: 512, scheduled: 530 },
+    { atMs: 3020, active: 512, scheduled: 540 }])).toEqual({ samples: 3, spanMs: 2020 });
+  expect(saturationRun([{ atMs: 1000, active: 512, scheduled: 520 }, { atMs: 3000, active: 512, scheduled: 530 },
+    { atMs: 5000, active: 512, scheduled: 540 }])).toEqual({ samples: 1, spanMs: 0 });
+  expect(() => saturationRun([{ atMs: 1000, active: 512, scheduled: 520 },
+    { atMs: 1000, active: 512, scheduled: 530 }])).toThrow();
+  expect(saturationRun([0, 1000, 2000, 5000, 5100, 5200, 5300].map(atMs =>
+    ({ atMs, active: 512, scheduled: 550 })))).toEqual({ samples: 3, spanMs: 2000 });
+});
+
+const exposition = ["# TYPE ClickHouseMetrics_GlobalThread gauge", "ClickHouseMetrics_GlobalThread 512",
+  "ClickHouseMetrics_GlobalThreadActive 512", "ClickHouseMetrics_GlobalThreadScheduled 600",
+  "ClickHouseMetrics_Query 6", "ClickHouseMetrics_QueryThread 12"].join("\n");
+
+test("reads complete direct atomic scheduler gauges and never substitutes missing scrapes with zero", () => {
+  expect(parseSchedulerMetrics(exposition)).toEqual({ GlobalThread: 512, GlobalThreadActive: 512,
+    GlobalThreadScheduled: 600, Query: 6, QueryThread: 12 });
+  for (const invalid of ["", "<html>unavailable</html>", exposition.replace("ClickHouseMetrics_QueryThread 12", ""),
+    `${exposition}\nClickHouseMetrics_GlobalThread 512`, exposition.replace("QueryThread 12", "QueryThread NaN"),
+    exposition.replace("QueryThread 12", "QueryThread -1"), exposition.replace("QueryThread 12", 'QueryThread{host="unexpected"} 12')]) {
+    expect(() => parseSchedulerMetrics(invalid)).toThrow();
+  }
+});
+
+test("direct metrics are fixture-only and sampled independently of blocked SQL watchdogs", async () => {
+  const smoke = await Bun.file(new URL("./clickhouse-pressure.ts", import.meta.url)).text();
+  expect(smoke).toContain("--prometheus.port=9363");
+  expect(smoke).toContain("--prometheus.asynchronous_metrics=false");
+  expect(smoke).toContain("await sampler");
+  expect(smoke).not.toContain("FROM system.metric_log");
+  expect(smoke).not.toContain('"--publish"');
+  const xml = await Bun.file(new URL("../images/clickhouse.railway.xml", import.meta.url)).text();
+  expect(xml).not.toContain("prometheus");
+});
+
+test("sampler keeps observing real local HTTP while another operation is blocked", async () => {
+  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response(exposition) });
+  let stop = false;
+  let count = 0;
+  let observed!: () => void;
+  const threeSamples = new Promise<void>(resolve => { observed = resolve; });
+  let unblock!: () => void;
+  let blockedDone = false;
+  const blockedOperation = new Promise<void>(resolve => { unblock = resolve; }).then(() => { blockedDone = true; });
+  const sampler = sampleScheduler(async () => {
+    const data = parseSchedulerMetrics(await (await fetch(server.url)).text());
+    if (++count === 3) observed();
+    return data;
+  }, () => stop, 5);
+  const timeout = setTimeout(observed, 1000);
+  try {
+    await threeSamples;
+    expect(count).toBeGreaterThanOrEqual(3);
+    expect(blockedDone).toBe(false);
+    stop = true;
+    const samples = await sampler;
+    expect(samples.length).toBeGreaterThanOrEqual(3);
+    expect(samples.every(sample => sample.active === 512 && sample.queryThreads === 12)).toBe(true);
+  } finally {
+    clearTimeout(timeout);
+    stop = true;
+    unblock();
+    await blockedOperation;
+    await sampler.catch(() => undefined);
+    server.stop(true);
+  }
+});
+
+test("sampler fails on a lost scrape rather than reusing its last successful gauges", async () => {
+  let reads = 0;
+  await expect(sampleScheduler(async () => {
+    if (++reads === 2) throw new Error("fixture scrape unavailable");
+    return parseSchedulerMetrics(exposition);
+  }, () => false, 1)).rejects.toThrow("fixture scrape unavailable");
+  expect(reads).toBe(2);
 });
 
 test("uses maximum actual interval overlap, including censored old queries", () => {

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { assertPressureReceipt, calibrateBufferPool, maximumOverlap, saturationRun, type PressureReceipt } from "./lib/clickhouse-pressure";
+import { isIP } from "node:net";
+import { assertPressureReceipt, calibrateBufferPool, maximumOverlap, parseSchedulerMetrics, sampleScheduler,
+  saturationRun, type PressureReceipt, type SchedulerMetrics, type SchedulerSample } from "./lib/clickhouse-pressure";
 
 const candidate = Bun.argv[2];
 assert.match(candidate ?? "", /^ghcr\.io\/uptomic\/posthog-railway\/clickhouse@sha256:[a-f0-9]{64}$/);
@@ -11,6 +13,7 @@ let containerCreated = false;
 let volumeCreated = false;
 let stage = "starting";
 let cleaning: Promise<void> | undefined;
+let metricsEndpoint: string | undefined;
 
 async function docker(args: string[], timeoutMs = 10_000): Promise<string> {
   const child = Bun.spawn(["docker", ...args], { stdout: "pipe", stderr: "pipe" });
@@ -50,9 +53,19 @@ function query(sql: string, timeout = 5000, queryId?: string): Promise<string> {
   return docker(["exec", container, "clickhouse-client", "--user", "clickhouse", "--password", "test-only",
     "--receive_timeout", String(Math.ceil(timeout / 1000)), ...(queryId ? ["--query_id", queryId] : []), "--query", sql], timeout + 1000);
 }
-async function metrics(): Promise<Record<string, number>> {
-  const rows = JSON.parse(await query("SELECT metric,value FROM system.metrics WHERE metric IN ('GlobalThread','GlobalThreadActive','GlobalThreadScheduled','Query','QueryThread') FORMAT JSON"));
-  return Object.fromEntries(rows.data.map((row: { metric: string; value: string }) => [row.metric, Number(row.value)]));
+async function metrics(): Promise<SchedulerMetrics> {
+  assert.ok(metricsEndpoint, "Disposable container metrics address missing");
+  const response = await fetch(metricsEndpoint, { signal: AbortSignal.timeout(1000), redirect: "error" });
+  assert.ok(response.ok, `Direct scheduler metrics HTTP ${response.status}`);
+  return parseSchedulerMetrics(await response.text());
+}
+async function locateMetricsEndpoint(): Promise<void> {
+  assert.ok(containerCreated && container);
+  const address = await docker(["inspect", "--format", "{{.NetworkSettings.IPAddress}}", container]);
+  assert.equal(isIP(address), 4, "Expected this disposable container's bridge IPv4");
+  assert.ok(/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(address), "Fixture address is not private");
+  metricsEndpoint = `http://${address}:9363/metrics`;
+  await metrics();
 }
 async function cgroup(): Promise<{ current: number; peak: number; pidEvents: number; oom: number }> {
   assert.ok(container);
@@ -81,10 +94,16 @@ async function create(image: string, bufferThreads: number): Promise<void> {
     "-e", "CLICKHOUSE_USER=clickhouse", "-e", "CLICKHOUSE_PASSWORD=test-only", "-e", "KAFKA_HOSTS=localhost:9092",
     image, "clickhouse", "su", "clickhouse", "clickhouse-server", "--config-file=/etc/clickhouse-server/config.xml", "--",
     `--background_buffer_flush_schedule_pool_size=${bufferThreads}`,
-    "--concurrent_threads_soft_limit_num=48", "--concurrent_threads_soft_limit_ratio_to_cores=0"]);
+    "--concurrent_threads_soft_limit_num=48", "--concurrent_threads_soft_limit_ratio_to_cores=0",
+    // Dedicated native HTTP handler reads CurrentMetrics atomics without SQL or
+    // GlobalThreadPool work. Only this fixture enables it; no host port is published.
+    "--prometheus.port=9363", "--prometheus.endpoint=/metrics", "--prometheus.metrics=true",
+    "--prometheus.events=false", "--prometheus.asynchronous_metrics=false", "--prometheus.errors=false",
+    "--prometheus.info=false", "--prometheus.histograms=false", "--prometheus.dimensional_metrics=false"]);
   containerCreated = true;
   await docker(["start", container]);
   await ready();
+  await locateMetricsEndpoint();
 }
 const constantSql = await Bun.file(new URL("./clickhouse-funnel-proof.sql", import.meta.url)).text();
 const loadSql = await Bun.file(new URL("./clickhouse-pressure.sql", import.meta.url)).text();
@@ -137,11 +156,13 @@ async function run(image: string, kind: PressureReceipt["kind"]): Promise<void> 
   stage = `${kind}:six-concurrent-funnels`;
   console.log(JSON.stringify({ stage, active, totalGlobal, bufferThreads, reserve,
     observedExternalTasks: reserved.current - totalGlobal, settings: actual }));
-  const start = new Date().toISOString().slice(0, 19).replace("T", " ");
   let done = 0;
   let correct = 0;
   const failures: string[] = [];
   const queryIds = Array.from({ length: 6 }, (_, index) => `${prefix}-${kind}-query-${index}`);
+  let stopSampling = false;
+  let sampleError: unknown;
+  const sampler = sampleScheduler(metrics, () => stopSampling).catch(error => { sampleError = error; return []; });
   const loads = queryIds.map((queryId, index) => query(loadSql, 35_000, queryId).then(result => {
     if (result === "8192") correct++; else failures.push(`query-${index}:wrong-count`);
   }).catch(error => { failures.push(`query-${index}:${error.message}`); }).finally(() => { done++; }));
@@ -150,17 +171,25 @@ async function run(image: string, kind: PressureReceipt["kind"]): Promise<void> 
   let pidEvents = 0;
   let oom = 0;
   const launched = Date.now();
-  // Preserve enough 1-second samples for the 7.5-second metric-log flush even
-  // if old queries fail quickly. Brief queueing alone is not a RED verdict.
-  while (done < 6 || Date.now() - launched < 20_000) {
-    const cg = await cgroup();
-    peakPids = Math.max(peakPids, cg.peak);
-    pidEvents = Math.max(pidEvents, cg.pidEvents);
-    oom = Math.max(oom, cg.oom);
-    try { assert.equal(await query("SELECT 1", 2000), "1"); } catch { watchdogFailures++; }
-    await Bun.sleep(250);
+  let history: SchedulerSample[];
+  try {
+    // Sampling runs independently: a blocked serial SQL watchdog must not
+    // prevent observation of the scheduler that is blocking it.
+    while (done < 6 || Date.now() - launched < 20_000) {
+      if (sampleError) throw sampleError;
+      const cg = await cgroup();
+      peakPids = Math.max(peakPids, cg.peak);
+      pidEvents = Math.max(pidEvents, cg.pidEvents);
+      oom = Math.max(oom, cg.oom);
+      try { assert.equal(await query("SELECT 1", 2000), "1"); } catch { watchdogFailures++; }
+      await Bun.sleep(250);
+    }
+    await Promise.all(loads);
+  } finally {
+    stopSampling = true;
+    history = await sampler;
   }
-  await Promise.all(loads);
+  if (sampleError) throw sampleError;
   const cg = await cgroup();
   peakPids = Math.max(peakPids, cg.peak);
   pidEvents = Math.max(pidEvents, cg.pidEvents);
@@ -168,12 +197,13 @@ async function run(image: string, kind: PressureReceipt["kind"]): Promise<void> 
   const pressureEnd = Date.now();
   stage = `${kind}:bounded-recovery`;
   if (kind === "baseline") {
-    // Clear ONLY the disposable old server's stalled state, retaining its
-    // already-flushed metric log. A generic client timeout never counts as RED.
+    // Clear ONLY the disposable old server's stalled state to retrieve its
+    // persisted query-start records. Direct metric samples survive outside it.
     await docker(["stop", "--time", "1", container]);
     assert.equal(await docker(["inspect", "--format", "{{.State.OOMKilled}}", container]), "false");
     await docker(["start", container]);
     await ready();
+    await locateMetricsEndpoint();
   }
   let recovered = await metrics();
   for (let attempt = 0; attempt < 20 && (recovered.GlobalThreadActive > active + 8 || recovered.GlobalThreadScheduled > recovered.GlobalThreadActive + 8); attempt++) {
@@ -181,11 +211,7 @@ async function run(image: string, kind: PressureReceipt["kind"]): Promise<void> 
     recovered = await metrics();
   }
   await query("SYSTEM FLUSH LOGS", 10_000);
-  const history = (JSON.parse(await query(`SELECT toUnixTimestamp(event_time) AS second,
-    CurrentMetric_GlobalThreadActive AS active, CurrentMetric_GlobalThreadScheduled AS scheduled,
-    CurrentMetric_QueryThread AS query_threads FROM system.metric_log
-    WHERE event_time >= toDateTime('${start}','UTC') ORDER BY event_time FORMAT JSON`)).data as Array<Record<string, number | string>>)
-    .map(row => ({ second: Number(row.second), active: Number(row.active), scheduled: Number(row.scheduled), queryThreads: Number(row.query_threads) }));
+  assert.ok(history.length > 0, "No direct scheduler observations captured");
   const saturation = saturationRun(history);
   const peakQueryThreads = Math.max(...history.map(row => row.queryThreads));
   const intervals = JSON.parse(await query(`SELECT query_id,
@@ -206,7 +232,8 @@ async function run(image: string, kind: PressureReceipt["kind"]): Promise<void> 
     peakActive: Math.max(...history.map(row => row.active)), overlappingQueries,
     launchedQueries: new Set(queryIds).size, peakQueryThreads,
     finalActive: recovered.GlobalThreadActive, finalScheduled: recovered.GlobalThreadScheduled };
-  console.log(JSON.stringify({ receipt, peakQueryThreads,
+  console.log(JSON.stringify({ receipt, peakQueryThreads, metricObservation: "direct-prometheus-atomic-gauges",
+    metricSamples: history.length, sampleSpanMs: history.at(-1)!.atMs - history[0].atMs,
     persistedQueryStarts: startedIntervals.length,
     censoredQueryIntervals: startedIntervals.filter(interval => !Number(interval.finished)).length, failures }));
   assertPressureReceipt(receipt);

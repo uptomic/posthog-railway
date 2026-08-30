@@ -186,6 +186,18 @@ bounded recovery, no PID/OOM exhaustion, and kernel `pids.peak < 950` under `--p
 Individual commands and the whole test have deadlines; only its own containers and volumes
 are removed. No production data or settings are touched by this test.
 
+Pressure metrics are sampled independently every 500 ms through a fixture-only Prometheus
+listener on port 9363, reached at that owned container's private Docker bridge address without
+publishing a host port. The exact engine's [metrics handler](https://github.com/ClickHouse/ClickHouse/blob/v26.6.2.158-stable/src/Server/PrometheusRequestHandler.cpp)
+reads [atomic CurrentMetrics gauges](https://github.com/ClickHouse/ClickHouse/blob/v26.6.2.158-stable/src/Server/PrometheusMetricsWriter.cpp)
+without submitting SQL/global-pool work. Other metric families are disabled. This avoids
+relying on `system.metric_log` flushing during the very stall under test; it still requires
+available HTTP/PID resources. Missing, malformed or failed scrapes fail the gate; samples use
+actual monotonic observation times, and gaps over 1.5 seconds break a saturation run. No
+interpolation, repeated stale values or fabricated zeroes are accepted. The serial SQL
+watchdog runs concurrently and cannot delay this observer. None of these listener options
+is baked into the production image.
+
 An image build or static test is not this runtime proof. Do not promote until both exact-image
 RED/GREEN and the existing mounted-volume UDF gate pass. After promotion, repeat the original
 saved funnel and observe production scheduler/PID headroom; explicit query overrides and
