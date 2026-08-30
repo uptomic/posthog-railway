@@ -250,6 +250,7 @@ jobs:
           docker pull "$image"
           case "$COMPONENT" in
             clickhouse)
+              image=$(docker image inspect "$image" --format '{{json .RepoDigests}}' | jq -er '[.[] | select(startswith("ghcr.io/uptomic/posthog-railway/clickhouse@sha256:"))] | if length == 1 then .[0] else error("Expected exactly one immutable ClickHouse digest") end')
               commit_file=/etc/uptomic-posthog-commit
               docker run --rm --entrypoint sh "$image" -c \
                 'grep -q "<background_schedule_pool_size>128</background_schedule_pool_size>" /etc/clickhouse-server/config.d/zz-railway-runtime.xml && grep -q "<listen_host replace=\"replace\">0.0.0.0</listen_host>" /etc/clickhouse-server/config.d/zz-railway-runtime.xml && grep -q "clickhouse-official-entrypoint.sh" /entrypoint.sh && grep -q "127.0.0.1" /etc/clickhouse-server/users.d/zz-railway-dictionary-user.xml'
@@ -257,6 +258,7 @@ jobs:
               test "$(docker run --rm -e RAILWAY_PRIVATE_DOMAIN=clickhouse.railway.internal -e CLICKHOUSE_USER=clickhouse -e CLICKHOUSE_PASSWORD=test-only -e KAFKA_HOSTS=localhost:9092 "$image" clickhouse extract-from-config --config-file=/etc/clickhouse-server/config.xml --key=remote_servers.posthog.shard.replica.user)" = clickhouse
               test "$(docker run --rm -e RAILWAY_PRIVATE_DOMAIN=clickhouse.railway.internal -e CLICKHOUSE_USER=clickhouse -e CLICKHOUSE_PASSWORD=test-only -e KAFKA_HOSTS=localhost:9092 "$image" clickhouse extract-from-config --config-file=/etc/clickhouse-server/config.xml --key=remote_servers.posthog.shard.replica.password)" = test-only
               bun scripts/clickhouse-smoke.ts "$image" "$CLICKHOUSE_BASE_IMAGE" "$CLICKHOUSE_BASE_VERSION" "$CLICKHOUSE_BUILD_SHA256" "$EXPECTED_COMMIT"
+              bun scripts/clickhouse-pressure.ts "$image"
               ;;
             mcp) commit_file=/code/commit.txt ;;
             node)

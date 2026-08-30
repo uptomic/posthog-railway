@@ -157,3 +157,36 @@ executes a synthetic ordered three-step browser funnel through ClickHouse SQL. N
 are published, no production data is used, and the fixture volume is removed afterward.
 Promotion still requires a fresh recoverable production backup, preservation of the existing
 volume and settings, and successful refresh of the original authenticated saved funnel.
+
+## ClickHouse query scheduler headroom
+
+The observed production background load occupies about 480 global workers. During the
+2026-08-30 incident, every one-second sample for fourteen minutes had 512 active global
+workers with up to 623 scheduled jobs, while CPU, memory and the 1000-PID cgroup were not
+exhausted. A same-image restart restored query execution. The release-owned XML now keeps
+the necessary Kafka/background pools at 128 each, increases the global pool to 640, and
+bounds its admitted queue to 640. The authenticated default profile uses `max_threads=8`;
+this is a default, not a restriction on explicit query settings. Queue-equals-pool prevents
+the specific nonblocking nested global-pool admission path from indefinitely queueing more
+jobs than workers; it is not a general guarantee against every possible deadlock.
+
+Candidate finalization additionally requires `scripts/clickhouse-pressure.ts` to reproduce
+the old d240 image's saturation and pass the candidate under the same six submitted,
+nonconstant eight-stream UDF queries. Old-image admission may stall before all six queries
+start: RED requires at least two genuinely overlapping persisted query IDs and more than
+one active query worker, alongside consecutive queued saturation and watchdog failure.
+GREEN requires all six actual overlapping queries, six correct results and at least sixteen
+query workers. Unfinished old intervals are explicitly censored at the pressure-end time;
+they are not reported as successful completions. Only the disposable fixture calibrates extra buffer
+scheduler threads to about 480 active workers and reserves approximately 243 non-global
+tasks to model native Kafka PID usage. Test CPU/parallelism overrides never enter the image.
+The gate requires persisted query-start/finish overlap, consecutive saturated metric samples
+for old-image RED, correct candidate results, a responsive serial `SELECT 1` watchdog,
+bounded recovery, no PID/OOM exhaustion, and kernel `pids.peak < 950` under `--pids-limit=1000`.
+Individual commands and the whole test have deadlines; only its own containers and volumes
+are removed. No production data or settings are touched by this test.
+
+An image build or static test is not this runtime proof. Do not promote until both exact-image
+RED/GREEN and the existing mounted-volume UDF gate pass. After promotion, repeat the original
+saved funnel and observe production scheduler/PID headroom; explicit query overrides and
+larger concurrent workloads remain operational limits requiring review.

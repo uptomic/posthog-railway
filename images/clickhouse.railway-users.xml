@@ -1,10 +1,16 @@
 <?xml version="1.0"?>
 <clickhouse>
+    <profiles>
+        <default>
+            <!-- A conservative default, not a constraint on explicit queries. -->
+            <max_threads>8</max_threads>
+        </default>
+    </profiles>
     <!-- PostHog's local-single dictionaries use SOURCE(CLICKHOUSE(USER
          'default' ...)). The official entrypoint removes that user whenever a
          named CLICKHOUSE_USER is configured. Restore only the local dictionary
          reader; all network clients continue to use the authenticated named
-         user created by the official entrypoint. -->
+         user defined here. -->
     <users>
         <default>
             <password remove="remove" />

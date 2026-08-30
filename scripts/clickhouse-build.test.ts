@@ -16,6 +16,24 @@ const candidate: CandidateRelease = { ...candidatePayload,
 };
 
 describe("ClickHouse immutable executable assets", () => {
+  test("reserves bounded nested-query headroom without starving Kafka consumers", async () => {
+    const runtime = await Bun.file(new URL("../images/clickhouse.railway.xml", import.meta.url)).text();
+    const users = await Bun.file(new URL("../images/clickhouse.railway-users.xml", import.meta.url)).text();
+    expect(runtime).toContain("<max_thread_pool_size>640</max_thread_pool_size>");
+    expect(runtime).toContain("<thread_pool_queue_size>640</thread_pool_queue_size>");
+    expect(runtime).toContain("<background_schedule_pool_size>128</background_schedule_pool_size>");
+    expect(runtime).toContain("<background_message_broker_schedule_pool_size>128</background_message_broker_schedule_pool_size>");
+    expect(users).toContain("<max_threads>8</max_threads>");
+    expect(users).toContain('<password from_env="CLICKHOUSE_PASSWORD" />');
+    expect(users).toContain("<profile>readonly</profile>");
+  });
+
+  test("requires old-image saturation RED and candidate pressure GREEN before finalization", async () => {
+    const workflow = Bun.YAML.parse(await Bun.file(new URL("../.github/workflows/build-candidate.yml", import.meta.url)).text()) as any;
+    expect(workflow.jobs.verify.steps.at(-1).run).toContain('bun scripts/clickhouse-pressure.ts "$image"');
+    expect(workflow.jobs.verify.steps.at(-1).run).toContain('Expected exactly one immutable ClickHouse digest');
+  });
+
   test("stores executable UDFs outside the persistent data mount", async () => {
     const dockerfile = await Bun.file(new URL("../images/clickhouse.Dockerfile", import.meta.url)).text();
     const config = await Bun.file(new URL("../images/clickhouse.railway.xml", import.meta.url)).text();

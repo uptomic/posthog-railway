@@ -9,7 +9,11 @@
          global pool ceiling to become an eagerly allocated scheduler pool. -->
     <background_schedule_pool_size>128</background_schedule_pool_size>
     <background_message_broker_schedule_pool_size>128</background_message_broker_schedule_pool_size>
-    <max_thread_pool_size>512</max_thread_pool_size>
+    <!-- Production background occupancy is ~480 global threads. The former
+         512 ceiling saturated under observed production query load.
+         Bound both workers and admitted jobs; retain PID headroom below 1000. -->
+    <max_thread_pool_size>640</max_thread_pool_size>
+    <thread_pool_queue_size>640</thread_pool_queue_size>
 
     <!-- The official container adds both IPv4 and IPv6 wildcard listeners.
          Railway's network namespace exposes them as the same socket. -->
