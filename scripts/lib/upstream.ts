@@ -30,6 +30,12 @@ export interface PosthogLock {
   upstreamRepository: typeof upstreamRepository;
 }
 
+export function isSameRelease(left: PosthogLock, right: PosthogLock): boolean {
+  const { resolvedAt: _leftResolvedAt, ...leftRelease } = left;
+  const { resolvedAt: _rightResolvedAt, ...rightRelease } = right;
+  return JSON.stringify(leftRelease) === JSON.stringify(rightRelease);
+}
+
 const manifestAccept = [
   "application/vnd.oci.image.index.v1+json",
   "application/vnd.docker.distribution.manifest.list.v2+json",

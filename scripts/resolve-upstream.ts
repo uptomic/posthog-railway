@@ -1,4 +1,9 @@
-import { officialComponents, resolveGhcrImage, resolveGithubHead } from "./lib/upstream";
+import {
+  isSameRelease,
+  officialComponents,
+  resolveGhcrImage,
+  resolveGithubHead,
+} from "./lib/upstream";
 import type { OfficialComponent, PosthogLock } from "./lib/upstream";
 
 const shouldWrite = process.argv.includes("--write");
@@ -10,7 +15,7 @@ const entries = await Promise.all(
   ]),
 );
 const shortCommit = upstreamCommit.slice(0, 12);
-const lock: PosthogLock = {
+const candidate: PosthogLock = {
   candidateImages: {
     main: `ghcr.io/uptomic/posthog-railway/main:sha-${shortCommit}`,
     mcp: `ghcr.io/uptomic/posthog-railway/mcp:sha-${shortCommit}`,
@@ -22,10 +27,19 @@ const lock: PosthogLock = {
   upstreamCommit,
   upstreamRepository: "PostHog/posthog",
 };
+const lockPath = new URL("../posthog.lock.json", import.meta.url);
+let lock = candidate;
+const currentFile = Bun.file(lockPath);
+if (await currentFile.exists()) {
+  const current = (await currentFile.json()) as PosthogLock;
+  if (isSameRelease(current, candidate)) {
+    lock = { ...candidate, resolvedAt: current.resolvedAt };
+  }
+}
 
 const serialized = `${JSON.stringify(lock, null, 2)}\n`;
 if (shouldWrite) {
-  await Bun.write(new URL("../posthog.lock.json", import.meta.url), serialized);
+  await Bun.write(lockPath, serialized);
 } else {
   process.stdout.write(serialized);
 }
