@@ -38,7 +38,7 @@ jobs:
           fi
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
           echo "short=${commit:0:12}" >> "$GITHUB_OUTPUT"
-          clickhouse_fingerprint="$(sha256sum images/clickhouse.Dockerfile images/clickhouse.railway.xml | sha256sum | cut -c1-12)"
+          clickhouse_fingerprint="$(find images -maxdepth 1 -type f -name 'clickhouse*' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)"
           echo "clickhouse_tag=sha-${commit:0:12}-bundle-${clickhouse_fingerprint}" >> "$GITHUB_OUTPUT"
       - name: Commit a changed upstream lock
         run: |
@@ -173,7 +173,31 @@ jobs:
             clickhouse)
               commit_file=/etc/uptomic-posthog-commit
               docker run --rm --entrypoint sh "$image" -c \
-                'grep -q "<background_schedule_pool_size>128</background_schedule_pool_size>" /etc/clickhouse-server/config.d/zz-railway-runtime.xml && grep -q "<listen_host replace=\"replace\">0.0.0.0</listen_host>" /etc/clickhouse-server/config.d/zz-railway-runtime.xml'
+                'grep -q "<background_schedule_pool_size>128</background_schedule_pool_size>" /etc/clickhouse-server/config.d/zz-railway-runtime.xml && grep -q "<listen_host replace=\"replace\">0.0.0.0</listen_host>" /etc/clickhouse-server/config.d/zz-railway-runtime.xml && grep -q "clickhouse-official-entrypoint.sh" /entrypoint.sh && grep -q "127.0.0.1" /etc/clickhouse-server/users.d/zz-railway-dictionary-user.xml'
+              test "$(docker run --rm -e RAILWAY_PRIVATE_DOMAIN=clickhouse.railway.internal -e CLICKHOUSE_USER=clickhouse -e CLICKHOUSE_PASSWORD=test-only -e KAFKA_HOSTS=localhost:9092 "$image" clickhouse extract-from-config --config-file=/etc/clickhouse-server/config.xml --key=remote_servers.posthog.shard.replica.host)" = clickhouse.railway.internal
+              test "$(docker run --rm -e RAILWAY_PRIVATE_DOMAIN=clickhouse.railway.internal -e CLICKHOUSE_USER=clickhouse -e CLICKHOUSE_PASSWORD=test-only -e KAFKA_HOSTS=localhost:9092 "$image" clickhouse extract-from-config --config-file=/etc/clickhouse-server/config.xml --key=remote_servers.posthog.shard.replica.user)" = clickhouse
+              test "$(docker run --rm -e RAILWAY_PRIVATE_DOMAIN=clickhouse.railway.internal -e CLICKHOUSE_USER=clickhouse -e CLICKHOUSE_PASSWORD=test-only -e KAFKA_HOSTS=localhost:9092 "$image" clickhouse extract-from-config --config-file=/etc/clickhouse-server/config.xml --key=remote_servers.posthog.shard.replica.password)" = test-only
+              container=posthog-clickhouse-candidate
+              docker rm -f "$container" >/dev/null 2>&1 || true
+              docker run -d --name "$container" \
+                -e RAILWAY_PRIVATE_DOMAIN=clickhouse.railway.internal \
+                -e CLICKHOUSE_USER=clickhouse \
+                -e CLICKHOUSE_PASSWORD=test-only \
+                -e KAFKA_HOSTS=localhost:9092 \
+                "$image"
+              trap 'docker logs "$container" || true; docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+              for _ in $(seq 1 60); do
+                if docker exec "$container" clickhouse-client --user clickhouse --password test-only --query 'SELECT 1' >/dev/null 2>&1; then
+                  break
+                fi
+                sleep 1
+              done
+              test "$(docker exec "$container" clickhouse-client --user clickhouse --password test-only --query "SELECT host_name FROM system.clusters WHERE cluster = 'posthog' LIMIT 1")" = clickhouse.railway.internal
+              test "$(docker exec "$container" clickhouse-client --user clickhouse --password test-only --query "SELECT is_local FROM system.clusters WHERE cluster = 'posthog' LIMIT 1")" = 1
+              test "$(docker exec "$container" clickhouse-client --user clickhouse --password test-only --query "SELECT count() FROM clusterAllReplicas('posthog', system.one)")" = 1
+              test "$(docker exec "$container" clickhouse-client --user default --query 'SELECT 1')" = 1
+              docker rm -f "$container" >/dev/null
+              trap - EXIT
               ;;
             mcp) commit_file=/code/commit.txt ;;
             *) exit 1 ;;

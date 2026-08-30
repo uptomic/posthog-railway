@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<clickhouse>
+    <!-- PostHog's local-single dictionaries use SOURCE(CLICKHOUSE(USER
+         'default' ...)). The official entrypoint removes that user whenever a
+         named CLICKHOUSE_USER is configured. Restore only the local dictionary
+         reader; all network clients continue to use the authenticated named
+         user created by the official entrypoint. -->
+    <users>
+        <default>
+            <password />
+            <networks replace="replace">
+                <ip>127.0.0.1</ip>
+                <ip>::1</ip>
+            </networks>
+            <profile>readonly</profile>
+            <quota>default</quota>
+            <access_management>0</access_management>
+            <grants>
+                <query>GRANT SELECT ON default.*</query>
+                <query>GRANT SELECT ON posthog.*</query>
+                <query>GRANT SELECT ON posthog_test.*</query>
+            </grants>
+        </default>
+    </users>
+</clickhouse>
