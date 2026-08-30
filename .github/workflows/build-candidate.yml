@@ -2,6 +2,11 @@ name: Build PostHog candidate
 
 on:
   workflow_dispatch:
+    inputs:
+      update_upstream:
+        description: Advance the upstream lock (scheduled builds always advance it)
+        type: boolean
+        default: false
   schedule:
     - cron: "17 2 * * *"
 
@@ -21,6 +26,11 @@ jobs:
       clickhouse_tag: ${{ steps.lock.outputs.clickhouse_tag }}
       commit: ${{ steps.lock.outputs.commit }}
       short: ${{ steps.lock.outputs.short }}
+      source_sha: ${{ github.sha }}
+      node_base_image: ${{ steps.lock.outputs.node_base_image }}
+      node_base_revision: ${{ steps.lock.outputs.node_base_revision }}
+      node_overlay_sha256: ${{ steps.lock.outputs.node_overlay_sha256 }}
+      node_tag: ${{ steps.lock.outputs.node_tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
@@ -28,10 +38,12 @@ jobs:
           bun-version: latest
       - id: lock
         run: |
-          bun run lock:resolve
+          if [ "${{ github.event_name }}" = schedule ] || [ "${{ inputs.update_upstream }}" = true ]; then
+            bun run lock:resolve
+          fi
           bun run check
           commit="$(jq -r .upstreamCommit posthog.lock.json)"
-          if git diff --quiet -- posthog.lock.json; then
+          if git diff --quiet -- posthog.lock.json && bun run candidate:verify >/dev/null 2>&1; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -40,6 +52,7 @@ jobs:
           echo "short=${commit:0:12}" >> "$GITHUB_OUTPUT"
           clickhouse_fingerprint="$(find images -maxdepth 1 -type f -name 'clickhouse*' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)"
           echo "clickhouse_tag=sha-${commit:0:12}-bundle-${clickhouse_fingerprint}" >> "$GITHUB_OUTPUT"
+          bun scripts/node-build-inputs.ts >> "$GITHUB_OUTPUT"
       - name: Commit a changed upstream lock
         run: |
           if git diff --quiet -- posthog.lock.json; then
@@ -143,14 +156,62 @@ jobs:
           cache-from: type=gha,scope=posthog-clickhouse
           cache-to: type=gha,mode=max,scope=posthog-clickhouse
 
+  build-node:
+    needs: resolve
+    if: ${{ needs.resolve.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.resolve.outputs.source_sha }}
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: existing
+        name: Reuse only an identical base-plus-overlay candidate
+        env:
+          IMAGE_TAG: ${{ needs.resolve.outputs.node_tag }}
+        run: |
+          image="ghcr.io/uptomic/posthog-railway/node:${IMAGE_TAG}"
+          if docker manifest inspect "$image" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        if: ${{ steps.existing.outputs.exists != 'true' }}
+        with:
+          context: images/node
+          file: images/node/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          sbom: true
+          tags: ghcr.io/uptomic/posthog-railway/node:${{ needs.resolve.outputs.node_tag }}
+          build-args: |
+            NODE_BASE_IMAGE=${{ needs.resolve.outputs.node_base_image }}
+            NODE_BASE_REVISION=${{ needs.resolve.outputs.node_base_revision }}
+            NODE_OVERLAY_SHA256=${{ needs.resolve.outputs.node_overlay_sha256 }}
+          cache-from: type=gha,scope=posthog-node-overlay
+          cache-to: type=gha,mode=max,scope=posthog-node-overlay
+
   verify:
-    needs: [resolve, build, build-clickhouse]
+    needs: [resolve, build, build-clickhouse, build-node]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       matrix:
-        component: [clickhouse, mcp]
+        component: [clickhouse, mcp, node]
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.resolve.outputs.source_sha }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: latest
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ghcr.io
@@ -162,10 +223,16 @@ jobs:
           CLICKHOUSE_TAG: ${{ needs.resolve.outputs.clickhouse_tag }}
           EXPECTED_COMMIT: ${{ needs.resolve.outputs.commit }}
           EXPECTED_SHORT: ${{ needs.resolve.outputs.short }}
+          NODE_TAG: ${{ needs.resolve.outputs.node_tag }}
+          NODE_BASE_IMAGE: ${{ needs.resolve.outputs.node_base_image }}
+          NODE_BASE_REVISION: ${{ needs.resolve.outputs.node_base_revision }}
+          NODE_OVERLAY_SHA256: ${{ needs.resolve.outputs.node_overlay_sha256 }}
         run: |
+          expected_file_commit="$EXPECTED_COMMIT"
           case "$COMPONENT" in
             clickhouse) image="ghcr.io/uptomic/posthog-railway/clickhouse:${CLICKHOUSE_TAG}" ;;
             mcp) image="ghcr.io/uptomic/posthog-railway/mcp:sha-${EXPECTED_SHORT}" ;;
+            node) image="ghcr.io/uptomic/posthog-railway/node:${NODE_TAG}" ;;
             *) exit 1 ;;
           esac
           docker pull "$image"
@@ -200,10 +267,15 @@ jobs:
               trap - EXIT
               ;;
             mcp) commit_file=/code/commit.txt ;;
+            node)
+              bun scripts/node-smoke.ts "$image" "$NODE_BASE_IMAGE" "$NODE_BASE_REVISION" "$NODE_OVERLAY_SHA256"
+              commit_file=/code/commit.txt
+              expected_file_commit="$NODE_BASE_REVISION"
+              ;;
             *) exit 1 ;;
           esac
           docker run --rm --entrypoint sh "$image" -c \
-            'test "$(cat "$1")" = "$2"' _ "$commit_file" "$EXPECTED_COMMIT"
+            'test "$(cat "$1")" = "$2"' _ "$commit_file" "$expected_file_commit"
           docker image inspect "$image" --format '{{json .RepoDigests}}'
 
   finalize:
@@ -229,6 +301,7 @@ jobs:
         env:
           EXPECTED_COMMIT: ${{ needs.resolve.outputs.commit }}
           EXPECTED_SHORT: ${{ needs.resolve.outputs.short }}
+          NODE_OVERLAY_SHA256: ${{ needs.resolve.outputs.node_overlay_sha256 }}
         run: |
           mcp_digest="$(docker buildx imagetools inspect \
             "ghcr.io/uptomic/posthog-railway/mcp:sha-${EXPECTED_SHORT}" \
@@ -236,8 +309,12 @@ jobs:
           clickhouse_digest="$(docker buildx imagetools inspect \
             "ghcr.io/uptomic/posthog-railway/clickhouse:${{ needs.resolve.outputs.clickhouse_tag }}" \
             --format '{{json .Manifest}}' | jq -er .digest)"
+          node_digest="$(docker buildx imagetools inspect \
+            "ghcr.io/uptomic/posthog-railway/node:${{ needs.resolve.outputs.node_tag }}" \
+            --format '{{json .Manifest}}' | jq -er .digest)"
           export MCP_DIGEST="$mcp_digest"
           export CLICKHOUSE_DIGEST="$clickhouse_digest"
+          export NODE_DIGEST="$node_digest"
           bun scripts/write-candidate.ts
           bun run candidate:verify
       - name: Commit the candidate manifest

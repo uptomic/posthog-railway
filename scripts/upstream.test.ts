@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { isSameRelease, officialComponents } from "./lib/upstream";
 import type { CandidateRelease, PosthogLock } from "./lib/upstream";
+import { nodeOverlayProvenance } from "./lib/node-overlay";
 import productionBaseline from "../railway.production.json";
 import lockPayload from "../posthog.lock.json";
 import candidatePayload from "../posthog.candidate.json";
@@ -8,14 +9,23 @@ import {
   assertCandidateMatchesLock,
   gatewayCaddyfile,
   gatewayStartCommand,
-  railwayPlan,
+  buildRailwayPlan,
 } from "./render-railway-plan";
+
+// Structural tests must run before the real candidate is built; this digest is test-only.
+const candidateFixture: CandidateRelease = {
+  ...candidatePayload,
+  upstreamCommit: lockPayload.upstreamCommit,
+  images: { ...candidatePayload.images, node: `ghcr.io/uptomic/posthog-railway/node@sha256:${"1".repeat(64)}` },
+  nodeOverlay: nodeOverlayProvenance(lockPayload as PosthogLock),
+};
+const railwayPlan = buildRailwayPlan(candidateFixture, lockPayload as PosthogLock);
 
 describe("PostHog release bundle ownership", () => {
   test("rejects plan generation before the matching candidate is built", () => {
     expect(() =>
       assertCandidateMatchesLock(
-        { ...candidatePayload, upstreamCommit: "0".repeat(40) } as CandidateRelease,
+        { ...candidateFixture, upstreamCommit: "0".repeat(40) },
         lockPayload as PosthogLock,
       ),
     ).toThrow("Built candidate does not match the locked PostHog release");
@@ -25,7 +35,7 @@ describe("PostHog release bundle ownership", () => {
     const lock = lockPayload as PosthogLock;
     expect(() =>
       assertCandidateMatchesLock(
-        { ...candidatePayload, upstreamCommit: lock.upstreamCommit } as CandidateRelease,
+        { ...candidateFixture, upstreamCommit: lock.upstreamCommit },
         lock,
       ),
     ).not.toThrow();
@@ -149,8 +159,7 @@ describe("PostHog release bundle ownership", () => {
     }
   });
 
-  test("keeps the official node image on its built-in command", () => {
-    const lock = lockPayload as PosthogLock;
+  test("keeps every Node role on the same guarded image and inherited built-in command", () => {
     for (const serviceName of [
       "Cyclotron V2 Janitor",
       "Plugins",
@@ -158,7 +167,7 @@ describe("PostHog release bundle ownership", () => {
       "Recordings Blob Ingestion V2",
       "Recording API",
     ] as const) {
-      expect(railwayPlan.services[serviceName].image).toBe(lock.officialImages.node.image);
+      expect(railwayPlan.services[serviceName].image).toBe(candidateFixture.images.node);
       expect(railwayPlan.services[serviceName]).not.toHaveProperty("startCommand");
     }
   });
@@ -183,15 +192,49 @@ describe("PostHog release bundle ownership", () => {
     expect(railwayPlan.services["Recording API"].pluginServerMode).toBe("recording-api");
   });
 
+  test("requires the running CDP API behind the HTML preflight, not only Web liveness", () => {
+    expect(railwayPlan.services.Plugins).toMatchObject({
+      pluginServerMode: "cdp-api",
+      port: 6738,
+      healthcheckPath: "/_health",
+    });
+    expect(railwayPlan.requiredWiring.mainImageServices).toContain(
+      "CDP_API_URL must point to the running Plugins cdp-api service on private HTTP port 6738",
+    );
+    expect(railwayPlan.requiredWiring.privateNetworking).toContain(
+      "Verify Web login HTML and /_preflight from every Web replica; a fast root-to-login redirect and /_livez do not execute the HTML dependency checks",
+    );
+  });
+
+  test("keeps shadow Valkey credentials out of raw-logged endpoint settings", () => {
+    expect(railwayPlan.requiredWiring.nodeServices).toContain(
+      "CDP_VALKEY_HOST and CDP_VALKEY_READER_HOST must be credential-free Redis endpoint URLs; use CDP_VALKEY_PASSWORD separately because the locked source logs the host settings verbatim",
+    );
+    expect(railwayPlan.requiredWiring.nodeServices).toContain(
+      "Prove CDP API remains running after its asynchronous Valkey startup checks; an initial health response can precede a Redis retry-limit shutdown",
+    );
+  });
+
   test("uses Recording API's complete working Redis URL instead of a bare private host", () => {
     expect(railwayPlan.services["Recording API"].environment).toEqual({
       SESSION_RECORDING_API_REDIS_HOST: "${{REDIS_URL}}",
     });
     const wiring = railwayPlan.requiredWiring.recordingApiService.join(" ");
     expect(wiring).toContain("complete authenticated Redis URL, not a bare hostname");
-    expect(wiring).toContain("IPv6-only private hostname fails DNS resolution");
+    expect(wiring).toContain("overlay enables IPv6-only private Redis URL hostnames");
     expect(wiring).toContain("Do not append ?family=6");
-    expect(railwayPlan.services["Recording API"].image).toBe(lockPayload.officialImages.node.image);
+    expect(railwayPlan.services["Recording API"].image).toBe(candidateFixture.images.node);
+  });
+
+  test("rejects a missing or stale Node overlay instead of falling back to official Node", () => {
+    for (const candidate of [
+      { ...candidateFixture, images: { ...candidateFixture.images, node: lockPayload.officialImages.node.image } },
+      { ...candidateFixture, nodeOverlay: { ...candidateFixture.nodeOverlay, fingerprintSha256: "0".repeat(64) } },
+      { ...candidateFixture, nodeOverlay: { ...candidateFixture.nodeOverlay, baseImage: "different-base" } },
+      { ...candidateFixture, nodeOverlay: { ...candidateFixture.nodeOverlay, baseRevision: "0".repeat(40) } },
+    ]) {
+      expect(() => buildRailwayPlan(candidate, lockPayload as PosthogLock)).toThrow("Built Node overlay does not match");
+    }
   });
 
   test("requires the Cyclotron-specific SQLx database variable", () => {

@@ -57,16 +57,18 @@ A bare private hostname failed in production because this ioredis client default
 inherited private DNS is IPv6-only. Appending `?family=6` is not a fix: the URL query value reaches
 the socket as a string rather than a numeric address-family option.
 
-Reuse the service's already working complete authenticated URL; this is a configuration correction,
-not a source-image change. A full URL alone does not make an IPv6-only hostname work: the referenced
-endpoint must already be reachable by this client. Verify Recording API's Redis readiness and replay
-metadata from Web after applying it, without logging credentials.
+The initial Recording API recovery reused the service's already working complete authenticated URL
+without changing its image. A full URL alone does not make an IPv6-only hostname work: that original
+endpoint was already reachable by the upstream client. Keep this working URL when promoting the
+shared candidate Node overlay described below. Verify Recording API's Redis readiness and replay
+metadata from Web after applying the candidate, without logging credentials.
 
 ## Private-path acceptance checks
 
 Before completing production migration, verify from the actual caller:
 
 - Gateway to Web, Capture Backend, Replay Capture, Feature Flags, and Livestream.
+- Web to the running Plugins service in `cdp-api` mode on port 6738, using `CDP_API_URL`.
 - Web and Worker to Recording API and PersonHog Router.
 - PersonHog Router to PersonHog Replica over gRPC.
 - Node consumers to PersonHog Router and their private data-service dependencies.
@@ -76,3 +78,51 @@ Resolve the private hostname inside the caller and test the advertised applicati
 application responses or a gRPC request, not only DNS resolution, a public health result, or a
 provider deployment label. Metrics/readiness HTTP limitations must be reported separately from gRPC
 reachability.
+
+## Web HTML bootstrap is a separate dependency check
+
+The production Web root redirects anonymous requests to `/login` before rendering the SPA.
+A quick 302 therefore does not exercise template startup. Web `/_livez` likewise does not prove
+the template dependencies are available. Check real `/login` HTML and `/_preflight` from every
+Web replica, then verify the canonical authenticated browser path.
+
+At the locked Web revision, template rendering calls `preflight_check`, which invokes the Node
+CDP API's `/_health` through `CDP_API_URL`. That request has no explicit timeout. An exited CDP
+process can therefore leave Web waiting until the public edge times out, despite green Web
+liveness and functioning authenticated query APIs. Inspect both Railway deployment status and
+actual instance/process state; `SUCCESS` with an `EXITED` instance is not service readiness.
+
+## CDP shadow Valkey client and secret boundary
+
+At Node revision `49c2532424f7f7e6825a0cd5ef61c4ba7bc212f7`, every CDP process creates a
+required shadow Valkey writer pool. `CDP_VALKEY_HOST` and `CDP_VALKEY_READER_HOST` are used
+as Redis connection URLs but logged verbatim by `createCdpValkeyShadowPools`. They must be
+credential-free endpoints; provide authentication through `CDP_VALKEY_PASSWORD`. Do not copy
+the Recording API's authenticated-URL pattern into these settings.
+
+Test the exact deployed client's PING from the caller, then verify sustained CDP process
+health after asynchronous startup. The shared Redis client calls `killGracefully` after more
+than ten error events, even though the shadow startup probe catches its own initial failure.
+An early `/_health` response can therefore precede process exit. Never expose an unauthenticated
+Valkey store publicly or disable this required dependency to make preflight appear healthy.
+
+## Versioned Node compatibility image
+
+The release-owned `images/node` overlay derives from the exact official Node digest in the
+upstream lock. It changes only the shared Redis constructor's options: a `redis://` or
+`rediss://` URL ending in `.railway.internal` receives numeric `family: 0` when neither the
+caller nor URL specifies a family or alternate host/path. Public hosts and explicit options
+remain unchanged. No global DNS override, public Valkey endpoint or runtime filesystem
+patch is part of this design.
+
+The build fails on an unexpected upstream revision, ioredis version, or shared-constructor
+function. Base-image and overlay-file fingerprints identify the resulting candidate, and all
+five Node roles consume that same immutable candidate digest. Upstream commands and entrypoints
+remain inherited. A future upstream fix or constructor change requires review of this one
+guarded compatibility owner, not a silent fallback to an unverified image.
+
+The build's exact-image tests must prove IPv6-only and IPv4-only Redis connections as well as
+explicit-family and non-private-host behavior. Production acceptance additionally requires a
+running CDP instance for at least three minutes, no Redis retry-limit termination, and fast HTML
+bootstrap from each Web replica. Neither a successful image build nor its first health response
+alone establishes production readiness.

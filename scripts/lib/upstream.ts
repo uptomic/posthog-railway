@@ -58,6 +58,12 @@ export interface CandidateRelease {
   images: {
     clickhouse: string;
     mcp: string;
+    node: string;
+  };
+  nodeOverlay: {
+    baseImage: string;
+    baseRevision: string;
+    fingerprintSha256: string;
   };
   schemaVersion: 1;
   upstreamCommit: string;
