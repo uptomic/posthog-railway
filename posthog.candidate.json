@@ -1,9 +1,9 @@
 {
-  "builtAt": "2026-08-30T11:45:40.301Z",
+  "builtAt": "2026-08-30T12:34:41.093Z",
   "images": {
-    "clickhouse": "ghcr.io/uptomic/posthog-railway/clickhouse@sha256:f6080f4da6fdedfe196ca671529526bfb02c589048345d32d136e5be153457c9",
-    "mcp": "ghcr.io/uptomic/posthog-railway/mcp@sha256:33985559bb7ded41739904f057ac62eeee502ff6a763649454e66179cae390a2"
+    "clickhouse": "ghcr.io/uptomic/posthog-railway/clickhouse@sha256:3217cd594679b7ce8d002f06082746d8c942dcecd9542e495fe0e255f73c37b4",
+    "mcp": "ghcr.io/uptomic/posthog-railway/mcp@sha256:f3feb2b387ec31e4a5d8e18c1da5a62561b85363f546b6daea98d39cab01c617"
   },
   "schemaVersion": 1,
-  "upstreamCommit": "a4206631b834fab0c4683f8be8ac2412b23c5cb2"
+  "upstreamCommit": "da93d8bbd71e23d49a8372ec43b4a4c7f75c1316"
 }
