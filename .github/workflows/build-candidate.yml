@@ -24,6 +24,9 @@ jobs:
     outputs:
       changed: ${{ steps.lock.outputs.changed }}
       clickhouse_tag: ${{ steps.lock.outputs.clickhouse_tag }}
+      clickhouse_base_image: ${{ steps.lock.outputs.clickhouse_base_image }}
+      clickhouse_base_version: ${{ steps.lock.outputs.clickhouse_base_version }}
+      clickhouse_build_sha256: ${{ steps.lock.outputs.clickhouse_build_sha256 }}
       commit: ${{ steps.lock.outputs.commit }}
       short: ${{ steps.lock.outputs.short }}
       source_sha: ${{ github.sha }}
@@ -52,8 +55,7 @@ jobs:
           fi
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
           echo "short=${commit:0:12}" >> "$GITHUB_OUTPUT"
-          clickhouse_fingerprint="$(find images -maxdepth 1 -type f -name 'clickhouse*' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)"
-          echo "clickhouse_tag=sha-${commit:0:12}-bundle-${clickhouse_fingerprint}" >> "$GITHUB_OUTPUT"
+          bun scripts/clickhouse-build-inputs.ts >> "$GITHUB_OUTPUT"
           bun scripts/node-build-inputs.ts >> "$GITHUB_OUTPUT"
       - name: Commit a changed upstream lock
         run: |
@@ -115,6 +117,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.resolve.outputs.source_sha }}
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: PostHog/posthog
@@ -127,11 +131,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: version
-        name: Resolve the candidate ClickHouse version
+        name: Reject an unreviewed ClickHouse engine upgrade
+        env:
+          EXPECTED_VERSION: ${{ needs.resolve.outputs.clickhouse_base_version }}
         run: |
           version="$(sed -nE 's/.*clickhouse\/clickhouse-server:([^} ]+).*/\1/p' posthog/docker-compose.base.yml | head -n 1)"
-          test -n "$version"
-          echo "value=$version" >> "$GITHUB_OUTPUT"
+          test "$version" = "$EXPECTED_VERSION"
       - id: existing
         name: Reuse an existing immutable candidate
         env:
@@ -148,12 +153,14 @@ jobs:
         with:
           context: .
           file: images/clickhouse.Dockerfile
+          platforms: linux/amd64
           push: true
           provenance: true
           sbom: true
           tags: ghcr.io/uptomic/posthog-railway/clickhouse:${{ needs.resolve.outputs.clickhouse_tag }}
           build-args: |
-            CLICKHOUSE_BASE_IMAGE=clickhouse/clickhouse-server:${{ steps.version.outputs.value }}
+            CLICKHOUSE_BASE_IMAGE=${{ needs.resolve.outputs.clickhouse_base_image }}
+            CLICKHOUSE_BUILD_SHA256=${{ needs.resolve.outputs.clickhouse_build_sha256 }}
             COMMIT_HASH=${{ needs.resolve.outputs.commit }}
           cache-from: type=gha,scope=posthog-clickhouse
           cache-to: type=gha,mode=max,scope=posthog-clickhouse
@@ -223,6 +230,9 @@ jobs:
         env:
           COMPONENT: ${{ matrix.component }}
           CLICKHOUSE_TAG: ${{ needs.resolve.outputs.clickhouse_tag }}
+          CLICKHOUSE_BASE_IMAGE: ${{ needs.resolve.outputs.clickhouse_base_image }}
+          CLICKHOUSE_BASE_VERSION: ${{ needs.resolve.outputs.clickhouse_base_version }}
+          CLICKHOUSE_BUILD_SHA256: ${{ needs.resolve.outputs.clickhouse_build_sha256 }}
           EXPECTED_COMMIT: ${{ needs.resolve.outputs.commit }}
           EXPECTED_SHORT: ${{ needs.resolve.outputs.short }}
           NODE_TAG: ${{ needs.resolve.outputs.node_tag }}
@@ -246,27 +256,7 @@ jobs:
               test "$(docker run --rm -e RAILWAY_PRIVATE_DOMAIN=clickhouse.railway.internal -e CLICKHOUSE_USER=clickhouse -e CLICKHOUSE_PASSWORD=test-only -e KAFKA_HOSTS=localhost:9092 "$image" clickhouse extract-from-config --config-file=/etc/clickhouse-server/config.xml --key=remote_servers.posthog.shard.replica.host)" = clickhouse.railway.internal
               test "$(docker run --rm -e RAILWAY_PRIVATE_DOMAIN=clickhouse.railway.internal -e CLICKHOUSE_USER=clickhouse -e CLICKHOUSE_PASSWORD=test-only -e KAFKA_HOSTS=localhost:9092 "$image" clickhouse extract-from-config --config-file=/etc/clickhouse-server/config.xml --key=remote_servers.posthog.shard.replica.user)" = clickhouse
               test "$(docker run --rm -e RAILWAY_PRIVATE_DOMAIN=clickhouse.railway.internal -e CLICKHOUSE_USER=clickhouse -e CLICKHOUSE_PASSWORD=test-only -e KAFKA_HOSTS=localhost:9092 "$image" clickhouse extract-from-config --config-file=/etc/clickhouse-server/config.xml --key=remote_servers.posthog.shard.replica.password)" = test-only
-              container=posthog-clickhouse-candidate
-              docker rm -f "$container" >/dev/null 2>&1 || true
-              docker run -d --name "$container" \
-                -e RAILWAY_PRIVATE_DOMAIN=clickhouse.railway.internal \
-                -e CLICKHOUSE_USER=clickhouse \
-                -e CLICKHOUSE_PASSWORD=test-only \
-                -e KAFKA_HOSTS=localhost:9092 \
-                "$image" clickhouse su clickhouse clickhouse-server --config-file=/etc/clickhouse-server/config.xml
-              trap 'docker logs "$container" || true; docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
-              for _ in $(seq 1 60); do
-                if docker exec "$container" clickhouse-client --user clickhouse --password test-only --query 'SELECT 1' >/dev/null 2>&1; then
-                  break
-                fi
-                sleep 1
-              done
-              test "$(docker exec "$container" clickhouse-client --user clickhouse --password test-only --query "SELECT host_name FROM system.clusters WHERE cluster = 'posthog' LIMIT 1")" = clickhouse.railway.internal
-              test "$(docker exec "$container" clickhouse-client --user clickhouse --password test-only --query "SELECT is_local FROM system.clusters WHERE cluster = 'posthog' LIMIT 1")" = 1
-              test "$(docker exec "$container" clickhouse-client --user clickhouse --password test-only --query "SELECT count() FROM clusterAllReplicas('posthog', system.one)")" = 1
-              test "$(docker exec "$container" clickhouse-client --user default --query 'SELECT 1')" = 1
-              docker rm -f "$container" >/dev/null
-              trap - EXIT
+              bun scripts/clickhouse-smoke.ts "$image" "$CLICKHOUSE_BASE_IMAGE" "$CLICKHOUSE_BASE_VERSION" "$CLICKHOUSE_BUILD_SHA256" "$EXPECTED_COMMIT"
               ;;
             mcp) commit_file=/code/commit.txt ;;
             node)
@@ -304,6 +294,7 @@ jobs:
           EXPECTED_COMMIT: ${{ needs.resolve.outputs.commit }}
           EXPECTED_SHORT: ${{ needs.resolve.outputs.short }}
           NODE_OVERLAY_SHA256: ${{ needs.resolve.outputs.node_overlay_sha256 }}
+          CLICKHOUSE_BUILD_SHA256: ${{ needs.resolve.outputs.clickhouse_build_sha256 }}
         run: |
           mcp_digest="$(docker buildx imagetools inspect \
             "ghcr.io/uptomic/posthog-railway/mcp:sha-${EXPECTED_SHORT}" \

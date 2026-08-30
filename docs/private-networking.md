@@ -134,3 +134,26 @@ explicit-family and non-private-host behavior. Production acceptance additionall
 running CDP instance for at least three minutes, no Redis retry-limit termination, and fast HTML
 bootstrap from each Web replica. Neither a successful image build nor its first health response
 alone establishes production readiness.
+
+## ClickHouse executable assets and persistent volumes
+
+The data volume at `/var/lib/clickhouse` masks image files beneath that directory. Keep the
+unchanged upstream UDF wrappers, binaries and versioned subdirectories in
+`/opt/posthog/user_scripts`, owned by `clickhouse`, and set `user_scripts_path` to that location
+in the single release-owned runtime XML. Do not copy executables into a production data volume
+or change saved insights to bypass a missing `aggregate_funnel` executable.
+
+`images/clickhouse-base.json` pins the engine independently from application upgrades. Its
+26.6.2.158 index was verified to have exactly the same first eleven filesystem layers as the
+previous production candidate. A new upstream engine version stops the build for a separately
+reviewed data-service upgrade. The candidate records this base plus a fingerprint of every
+owned ClickHouse image input and the upstream commit. Missing/stale fingerprints block plan
+generation and force the scheduled candidate build; finalization rejects changed inputs.
+
+The exact-image verification uses a disposable data volume with `volume-nocopy` so Docker
+cannot seed it with image assets and conceal the regression. It checks the engine/layer
+provenance, executable access as the runtime user, cluster/dictionary authentication, and
+executes a synthetic ordered three-step browser funnel through ClickHouse SQL. No host ports
+are published, no production data is used, and the fixture volume is removed afterward.
+Promotion still requires a fresh recoverable production backup, preservation of the existing
+volume and settings, and successful refresh of the original authenticated saved funnel.

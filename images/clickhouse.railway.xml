@@ -1,5 +1,9 @@
 <?xml version="1.0"?>
 <clickhouse>
+    <!-- /var/lib/clickhouse is a persistent volume; immutable UDF executables
+         must remain visible when that volume masks the image's data directory. -->
+    <user_scripts_path replace="replace">/opt/posthog/user_scripts/</user_scripts_path>
+
     <!-- Railway containers have a bounded PID budget. Keep enough scheduler
          capacity for PostHog's Kafka engines without allowing ClickHouse's
          global pool ceiling to become an eagerly allocated scheduler pool. -->

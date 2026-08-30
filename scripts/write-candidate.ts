@@ -1,6 +1,7 @@
 import type { CandidateRelease, PosthogLock } from "./lib/upstream";
 import lockPayload from "../posthog.lock.json";
 import { nodeOverlayProvenance } from "./lib/node-overlay";
+import { clickhouseBuildProvenance } from "./lib/clickhouse-build";
 
 const lock = lockPayload as PosthogLock;
 const digestPattern = /^sha256:[0-9a-f]{64}$/;
@@ -22,12 +23,15 @@ if (!nodeDigest || !digestPattern.test(nodeDigest)) {
   throw new Error("NODE_DIGEST must be an OCI sha256 digest");
 }
 const nodeOverlay = nodeOverlayProvenance(lock);
-if (commit !== lock.upstreamCommit || process.env.NODE_OVERLAY_SHA256 !== nodeOverlay.fingerprintSha256) {
+const clickhouseBuild = clickhouseBuildProvenance(lock);
+if (commit !== lock.upstreamCommit || process.env.NODE_OVERLAY_SHA256 !== nodeOverlay.fingerprintSha256 ||
+  process.env.CLICKHOUSE_BUILD_SHA256 !== clickhouseBuild.fingerprintSha256) {
   throw new Error("Built candidate inputs changed before finalization");
 }
 
 const release: CandidateRelease = {
   builtAt: new Date().toISOString(),
+  clickhouseBuild,
   images: {
     clickhouse: `ghcr.io/uptomic/posthog-railway/clickhouse@${clickhouseDigest}`,
     mcp: `ghcr.io/uptomic/posthog-railway/mcp@${mcpDigest}`,
@@ -46,7 +50,8 @@ if (await existingFile.exists()) {
     existing.schemaVersion === release.schemaVersion &&
     existing.upstreamCommit === release.upstreamCommit &&
     JSON.stringify(existing.images) === JSON.stringify(release.images) &&
-    JSON.stringify(existing.nodeOverlay) === JSON.stringify(release.nodeOverlay)
+    JSON.stringify(existing.nodeOverlay) === JSON.stringify(release.nodeOverlay) &&
+    JSON.stringify(existing.clickhouseBuild) === JSON.stringify(release.clickhouseBuild)
   ) {
     release.builtAt = existing.builtAt;
   }

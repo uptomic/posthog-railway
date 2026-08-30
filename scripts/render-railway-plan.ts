@@ -2,6 +2,7 @@ import candidatePayload from "../posthog.candidate.json";
 import lockPayload from "../posthog.lock.json";
 import type { CandidateRelease, PosthogLock } from "./lib/upstream";
 import { assertNodeOverlayCandidate } from "./lib/node-overlay";
+import { assertClickhouseBuildCandidate } from "./lib/clickhouse-build";
 
 const candidate = candidatePayload as CandidateRelease;
 const lock = lockPayload as PosthogLock;
@@ -16,6 +17,7 @@ export function assertCandidateMatchesLock(candidate: CandidateRelease, lock: Po
     throw new Error("Built candidate does not match the locked PostHog release");
   }
   assertNodeOverlayCandidate(candidate, lock);
+  assertClickhouseBuildCandidate(candidate, lock);
 }
 export function buildRailwayPlan(candidate: CandidateRelease, lock: PosthogLock) {
   assertCandidateMatchesLock(candidate, lock);

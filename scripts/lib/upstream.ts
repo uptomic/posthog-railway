@@ -55,6 +55,11 @@ export interface PosthogLock {
 
 export interface CandidateRelease {
   builtAt: string;
+  clickhouseBuild: {
+    baseImage: string;
+    baseVersion: string;
+    fingerprintSha256: string;
+  };
   images: {
     clickhouse: string;
     mcp: string;

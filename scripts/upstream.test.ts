@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { isSameRelease, officialComponents } from "./lib/upstream";
 import type { CandidateRelease, PosthogLock } from "./lib/upstream";
 import { nodeOverlayProvenance } from "./lib/node-overlay";
+import { clickhouseBuildProvenance } from "./lib/clickhouse-build";
 import productionBaseline from "../railway.production.json";
 import lockPayload from "../posthog.lock.json";
 import candidatePayload from "../posthog.candidate.json";
@@ -16,8 +17,12 @@ import {
 const candidateFixture: CandidateRelease = {
   ...candidatePayload,
   upstreamCommit: lockPayload.upstreamCommit,
-  images: { ...candidatePayload.images, node: `ghcr.io/uptomic/posthog-railway/node@sha256:${"1".repeat(64)}` },
+  images: { ...candidatePayload.images,
+    node: `ghcr.io/uptomic/posthog-railway/node@sha256:${"1".repeat(64)}`,
+    clickhouse: `ghcr.io/uptomic/posthog-railway/clickhouse@sha256:${"2".repeat(64)}`,
+  },
   nodeOverlay: nodeOverlayProvenance(lockPayload as PosthogLock),
+  clickhouseBuild: clickhouseBuildProvenance(lockPayload),
 };
 const railwayPlan = buildRailwayPlan(candidateFixture, lockPayload as PosthogLock);
 
