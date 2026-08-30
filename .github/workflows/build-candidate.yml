@@ -46,11 +46,9 @@ jobs:
     needs: resolve
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
-          - component: main
-            dockerfile: Dockerfile
           - component: node
             dockerfile: Dockerfile.node
           - component: mcp
@@ -81,7 +79,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        component: [main, node, mcp]
+        component: [node, mcp]
     steps:
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:

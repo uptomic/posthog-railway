@@ -18,7 +18,7 @@ for (const [name, repository] of Object.entries(officialComponents)) {
     throw new Error(`PostHog ${name} image revision is not an ancestor of the locked upstream`);
   }
 }
-const immutableCandidate = new RegExp(`^ghcr\\.io/uptomic/posthog-railway/(main|node|mcp):sha-${lock.upstreamCommit.slice(0, 12)}$`);
+const immutableCandidate = new RegExp(`^ghcr\\.io/uptomic/posthog-railway/(node|mcp):sha-${lock.upstreamCommit.slice(0, 12)}$`);
 for (const image of Object.values(lock.candidateImages)) {
   if (!immutableCandidate.test(image)) {
     throw new Error(`Candidate image is not tied to the locked upstream commit: ${image}`);

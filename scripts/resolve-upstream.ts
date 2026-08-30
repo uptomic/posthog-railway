@@ -17,7 +17,6 @@ const entries = await Promise.all(
 const shortCommit = upstreamCommit.slice(0, 12);
 const candidate: PosthogLock = {
   candidateImages: {
-    main: `ghcr.io/uptomic/posthog-railway/main:sha-${shortCommit}`,
     mcp: `ghcr.io/uptomic/posthog-railway/mcp:sha-${shortCommit}`,
     node: `ghcr.io/uptomic/posthog-railway/node:sha-${shortCommit}`,
   },

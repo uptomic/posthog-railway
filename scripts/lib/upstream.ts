@@ -2,6 +2,7 @@ export const upstreamRepository = "PostHog/posthog";
 export const upstreamRegistry = "ghcr.io";
 
 export const officialComponents = {
+  main: "posthog/posthog",
   capture: "posthog/posthog/capture",
   "cyclotron-janitor": "posthog/posthog/cyclotron-janitor",
   "feature-flags": "posthog/posthog/feature-flags",
@@ -19,7 +20,6 @@ export interface LockedImage {
 }
 export interface PosthogLock {
   candidateImages: {
-    main: string;
     mcp: string;
     node: string;
   };

@@ -9,6 +9,7 @@ describe("PostHog release bundle ownership", () => {
       "cyclotron-janitor",
       "feature-flags",
       "livestream",
+      "main",
       "property-defs-rs",
     ]);
   });

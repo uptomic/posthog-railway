@@ -1,10 +1,15 @@
 {
   "candidateImages": {
-    "main": "ghcr.io/uptomic/posthog-railway/main:sha-04bf0d56b2ba",
     "mcp": "ghcr.io/uptomic/posthog-railway/mcp:sha-04bf0d56b2ba",
     "node": "ghcr.io/uptomic/posthog-railway/node:sha-04bf0d56b2ba"
   },
   "officialImages": {
+    "main": {
+      "digest": "sha256:8d11cdfc73dc822428b336ed90dc2609dd6b76ba7cb937548c7a36f07ca968d9",
+      "image": "ghcr.io/posthog/posthog@sha256:8d11cdfc73dc822428b336ed90dc2609dd6b76ba7cb937548c7a36f07ca968d9",
+      "revision": "04bf0d56b2ba539fd64ddb353554e65abedafa77",
+      "source": "https://github.com/PostHog/posthog"
+    },
     "capture": {
       "digest": "sha256:55a69da3323c063c3cf56af56c8d07783aed2f9b29275bd553dfe456f405427b",
       "image": "ghcr.io/posthog/posthog/capture@sha256:55a69da3323c063c3cf56af56c8d07783aed2f9b29275bd553dfe456f405427b",
@@ -36,7 +41,7 @@
       "source": "https://github.com/PostHog/posthog"
     }
   },
-  "resolvedAt": "2026-08-30T08:10:05.607Z",
+  "resolvedAt": "2026-08-30T08:17:24.615Z",
   "schemaVersion": 1,
   "upstreamCommit": "04bf0d56b2ba539fd64ddb353554e65abedafa77",
   "upstreamRepository": "PostHog/posthog"

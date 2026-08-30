@@ -23,7 +23,7 @@
 
 1. Enter the maintenance window and create named pre-upgrade backups.
 2. Pause nonessential workers and take the final logical metadata dump.
-3. Run migrations with the candidate main image.
+3. Run migrations with the locked upstream main image.
 4. Deploy the complete application bundle in dependency order: Web/migrator, workers, Node services,
    then Rust ingestion/query services.
 5. Verify public health, event capture, query results, feature flags, replay, authenticated PostHog,

@@ -21,12 +21,12 @@ const plan = {
     "Property Defs RS": { image: lock.officialImages["property-defs-rs"].image },
     "Replay Capture": { image: lock.officialImages.capture.image },
     "Temporal Django Worker": {
-      image: lock.candidateImages.main,
+      image: lock.officialImages.main.image,
       startCommand: "/compose/temporal-django-worker",
     },
-    Web: { image: lock.candidateImages.main, startCommand: "/compose/start" },
+    Web: { image: lock.officialImages.main.image, startCommand: "/compose/start" },
     Worker: {
-      image: lock.candidateImages.main,
+      image: lock.officialImages.main.image,
       startCommand: "./bin/docker-worker-celery --with-scheduler",
     },
     "posthog-ingestion": {

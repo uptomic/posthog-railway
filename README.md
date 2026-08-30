@@ -8,7 +8,8 @@ PostHog does not publish versioned self-hosted releases. Upstream ships continuo
 
 - the upstream Git commit;
 - the exact OCI digest and embedded upstream revision of every published component image;
-- Uptomic-built `main`, `node`, and `mcp` images from that same commit;
+- PostHog's official `main` image locked by digest and Uptomic-built `node` and `mcp` images from
+  that same commit;
 - the Railway service-to-image and start-command plan;
 - completed migration, API, ingestion, UI, MCP, and rollback checks.
 
@@ -17,8 +18,8 @@ PostHog does not publish versioned self-hosted releases. Upstream ships continuo
 1. `bun run lock:resolve` resolves current upstream `master` and official component image digests.
 2. `bun run check` rejects mutable tags, unknown sources, malformed digests, or component revisions
    that are not ancestors of the locked upstream commit.
-3. The scheduled GitHub workflow builds candidate `main`, `node`, and `mcp` images from the exact
-   locked commit and publishes immutable SHA tags to GHCR.
+3. The scheduled GitHub workflow locks PostHog's official `main` digest, builds candidate `node` and
+   `mcp` images from the exact locked commit, and publishes immutable SHA tags to GHCR.
 4. `bun run railway:plan` renders the coordinated application-service update. It does not apply it.
 5. Production promotion requires verified volume backups, migration completion, a canary smoke run,
    and explicit application of the complete bundle. Never update PostHog services one at a time.
