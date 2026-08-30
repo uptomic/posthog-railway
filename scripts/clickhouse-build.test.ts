@@ -34,6 +34,7 @@ describe("ClickHouse immutable executable assets", () => {
     const smoke = await Bun.file(new URL("./clickhouse-smoke.ts", import.meta.url)).text();
     expect(smoke).toContain("target=/var/lib/clickhouse,volume-nocopy");
     expect(smoke).toContain('"exec", "--user", "clickhouse"');
+    expect(smoke).toContain('...(user === "clickhouse" ? ["--password", "test-only", "--receive_timeout", "30"] : [])');
     expect(smoke).toContain('assert.equal(await query(sql), "1"');
     expect(smoke).toContain('candidate.RootFS.Layers.slice(0, baseConfig.RootFS.Layers.length)');
     expect(smoke).toContain('["volume", "rm", volume]');

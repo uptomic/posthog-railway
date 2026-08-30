@@ -21,8 +21,10 @@ async function docker(args: string[], includeStderr = false): Promise<string> {
 
 async function query(sql: string, user = "clickhouse"): Promise<string> {
   return docker(["exec", container, "clickhouse-client", "--user", user,
-    ...(user === "clickhouse" ? ["--password", "test-only"] : []),
-    "--receive_timeout", "30", "--query", sql]);
+    // ClickHouse sends receive_timeout as a query setting. The localhost-only
+    // dictionary user is strictly read-only and must retain its server defaults.
+    ...(user === "clickhouse" ? ["--password", "test-only", "--receive_timeout", "30"] : []),
+    "--query", sql]);
 }
 
 try {

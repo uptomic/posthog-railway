@@ -81,6 +81,9 @@ data because the inherited deployment predates the current candidate by several 
    proof; PersonHog gRPC and its IPv4-only metrics/readiness listeners are separate checks.
 9. Verify public health, event capture, query results, feature flags, replay, authenticated PostHog,
    MCP, and Pulse's governed PostHog aggregate before leaving the window.
+   Canary storage counts must use `refresh=force_blocking` and report `is_cached=false`;
+   repeating a cached zero does not prove ingestion failure. Check replay metadata and the
+   actual recording blob separately, and never resend a canary merely to escape a stale query.
 
 ### Scoped application-only correction
 
