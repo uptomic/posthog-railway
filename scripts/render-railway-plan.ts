@@ -82,6 +82,7 @@ export function buildRailwayPlan(candidate: CandidateRelease, lock: PosthogLock)
       pluginServerMode: "cdp-api",
       port: 6738,
       healthcheckPath: "/_health",
+      restartPolicyType: "ALWAYS",
     },
     "posthog-ingestion": { image: candidate.images.node },
     "Recordings Blob Ingestion V2": {

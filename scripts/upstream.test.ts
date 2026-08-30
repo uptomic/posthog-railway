@@ -197,6 +197,7 @@ describe("PostHog release bundle ownership", () => {
       pluginServerMode: "cdp-api",
       port: 6738,
       healthcheckPath: "/_health",
+      restartPolicyType: "ALWAYS",
     });
     expect(railwayPlan.requiredWiring.mainImageServices).toContain(
       "CDP_API_URL must point to the running Plugins cdp-api service on private HTTP port 6738",

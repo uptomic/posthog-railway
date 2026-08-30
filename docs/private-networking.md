@@ -106,6 +106,14 @@ than ten error events, even though the shadow startup probe catches its own init
 An early `/_health` response can therefore precede process exit. Never expose an unauthenticated
 Valkey store publicly or disable this required dependency to make preflight appear healthy.
 
+Use `ALWAYS` restart policy for the long-running Plugins/CDP service. In this locked source,
+the Redis retry-limit path emits SIGTERM and the lifecycle handler calls `stop` without an error,
+which exits with code zero after cleanup. Railway's `ON_FAILURE` policy does not restart that
+successful exit; [its `ALWAYS` policy does](https://docs.railway.com/deployments/restart-policy).
+This is recovery behavior, not permission to accept a restart loop: require the same instance
+and process start identity throughout the sustained health window, and restart that window if
+the process changes. Keep one-shot migration jobs on their separate non-restarting policy.
+
 ## Versioned Node compatibility image
 
 The release-owned `images/node` overlay derives from the exact official Node digest in the

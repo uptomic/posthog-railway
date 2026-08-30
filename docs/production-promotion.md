@@ -94,7 +94,10 @@ mutation as a presumed environment-local update.
 For the Node Redis compatibility correction, promote Plugins/CDP first. Require at least three
 minutes of actual running process state plus fast `/login` and `/_preflight` from both Web replicas
 before promoting the other four Node roles to the same digest. Preserve commands, modes, ports,
-health checks, credentials and topology. Check whether the patch already created a deployment before
+health checks, credentials and topology. Set Plugins/CDP's restart policy to `ALWAYS` so its graceful
+Redis-failure exit cannot leave the API permanently stopped; keep other roles' policies unchanged.
+Require the same instance and process start identity throughout the acceptance window, with no
+Redis retry-limit or shutdown markers. Check whether the patch already created a deployment before
 requesting another, and retain only the changed fields for rollback. Do not restart databases or
 unrelated application services as part of this correction.
 
