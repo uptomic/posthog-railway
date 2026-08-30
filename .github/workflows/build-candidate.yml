@@ -184,7 +184,7 @@ jobs:
                 -e CLICKHOUSE_USER=clickhouse \
                 -e CLICKHOUSE_PASSWORD=test-only \
                 -e KAFKA_HOSTS=localhost:9092 \
-                "$image"
+                "$image" clickhouse-server --config-file=/etc/clickhouse-server/config.xml
               trap 'docker logs "$container" || true; docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
               for _ in $(seq 1 60); do
                 if docker exec "$container" clickhouse-client --user clickhouse --password test-only --query 'SELECT 1' >/dev/null 2>&1; then
