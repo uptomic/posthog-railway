@@ -1,5 +1,10 @@
 {
   "schemaVersion": 1,
   "ioredisVersion": "4.28.5",
-  "functionSha256": "05a1f28daa71bf4d6f0972d875f0f3a938a815d5f354366839a804479c84f6e5"
+  "functionSha256": "05a1f28daa71bf4d6f0972d875f0f3a938a815d5f354366839a804479c84f6e5",
+  "janitor": {
+    "pgVersion": "8.10.0",
+    "pgPoolVersion": "3.6.0",
+    "constructorSha256": "ae1524b566f11e5541e0a67201d0d617fbf89f7857ee5ef786f036c1882b17d9"
+  }
 }

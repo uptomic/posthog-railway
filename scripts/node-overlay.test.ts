@@ -50,7 +50,7 @@ describe("Railway private Redis IPv6 compatibility", () => {
 
 describe("immutable Node release contract", () => {
   test("fingerprints the official base and every executable overlay input", async () => {
-    const files = ["Dockerfile", "apply-overlay.cjs", "guard.json", "railway-redis-options.cjs"];
+    const files = ["Dockerfile", "apply-overlay.cjs", "guard.json", "railway-redis-options.cjs", "janitor-pool-errors.cjs"];
     const hashes = await Promise.all(files.map(async (name) => [
       name, createHash("sha256").update(await Bun.file(new URL(`../images/node/${name}`, import.meta.url)).text()).digest("hex"),
     ]));

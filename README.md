@@ -31,9 +31,10 @@ PostHog does not publish versioned self-hosted releases. Upstream ships continuo
    dictionary reader required by PostHog's local-single schema alongside the authenticated
    Railway network user. Its immutable tag
    includes a fingerprint of those build inputs so a runtime-config change cannot silently reuse an old image.
-   The Node build applies a guarded, private-host-only Redis address-family correction to the exact
-   official base without changing upstream commands or entrypoints. Its immutable tag fingerprints
-   both the base and overlay files, and its exact-image tests exercise IPv6 and IPv4 connections.
+   The Node build applies guarded private-host-only Redis address-family handling and a Janitor-owned
+   idle PostgreSQL pool error listener to the exact official base, without changing upstream commands,
+   entrypoints or process-wide error handling. Its immutable tag fingerprints both the base and overlay
+   files; exact-image tests exercise IPv6/IPv4 Redis and real PostgreSQL disconnect/reconnect behavior.
    All three images are published with provenance and SBOMs to GHCR. Manual workflow runs keep the
    current lock unless `update_upstream=true` is explicitly selected; scheduled runs resolve upstream.
 4. A successful build writes a second manifest that pins the built MCP, ClickHouse and Node images

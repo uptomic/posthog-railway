@@ -117,13 +117,14 @@ the process changes. Keep one-shot migration jobs on their separate non-restarti
 ## Versioned Node compatibility image
 
 The release-owned `images/node` overlay derives from the exact official Node digest in the
-upstream lock. It changes only the shared Redis constructor's options: a `redis://` or
+upstream lock. Its Redis correction changes only the shared constructor's options: a `redis://` or
 `rediss://` URL ending in `.railway.internal` receives numeric `family: 0` when neither the
 caller nor URL specifies a family or alternate host/path. Public hosts and explicit options
 remain unchanged. No global DNS override, public Valkey endpoint or runtime filesystem
 patch is part of this design.
 
-The build fails on an unexpected upstream revision, ioredis version, or shared-constructor
+The same overlay adds one error listener to the Janitor's own PostgreSQL pool, as described below.
+The build fails on an unexpected upstream revision, client-library version, or guarded constructor
 function. Base-image and overlay-file fingerprints identify the resulting candidate, and all
 five Node roles consume that same immutable candidate digest. Upstream commands and entrypoints
 remain inherited. A future upstream fix or constructor change requires review of this one
@@ -134,6 +135,32 @@ explicit-family and non-private-host behavior. Production acceptance additionall
 running CDP instance for at least three minutes, no Redis retry-limit termination, and fast HTML
 bootstrap from each Web replica. Neither a successful image build nor its first health response
 alone establishes production readiness.
+
+## Janitor idle PostgreSQL connections
+
+At the locked Node revision, `CyclotronV2Janitor` constructs a raw `pg.Pool` without an `error`
+listener, unlike the existing shared `createPostgresPool` owner. The exact compiled module resolves
+`pg 8.10.0` and `pg-pool 3.6.0`. When an idle connection drops, pg-pool removes that client and then
+emits an error; without a listener it becomes an uncaught process error.
+[Pool error semantics](https://node-postgres.com/apis/pool#error)
+
+The existing `images/node` compatibility owner guards the exact Janitor constructor and both client
+versions before adding its pool-local error listener. It logs a fixed Janitor event and bounded
+SQLSTATE only, never the error/client object, message or database URL. The pool can obtain a new
+connection on its next query. Active-query errors still reject, cleanup failures keep their existing
+handling, and no statement retry, process-wide exception handler or restart-policy change is added.
+The error-bearing lifecycle shutdown exits with code one; this differs from Plugins' separately
+documented Redis SIGTERM/exit-zero path. Do not change Janitor to `ALWAYS` to hide a crash loop.
+
+Exact-image verification instantiates the actual compiled Janitor class against a disposable
+PostgreSQL database on an internal Docker network, without host ports or persistent storage. It
+terminates only the backend identified by the fixture's PID, application name, database and idle
+state: the official base must exhibit the unhandled pool error and exit one; the candidate must
+remain in the same process, evict the old client and query through a new backend. A second termination
+during a fixture query must still reject that query and permit a subsequent query. All probes have
+hard deadlines and remove only their owned containers. Production acceptance still requires sustained
+same-instance health and increasing Janitor cleanup-run counters; this fix does not diagnose why the
+network/backend disconnected in the first place.
 
 ## ClickHouse executable assets and persistent volumes
 
