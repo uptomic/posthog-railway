@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       changed: ${{ steps.lock.outputs.changed }}
+      clickhouse_tag: ${{ steps.lock.outputs.clickhouse_tag }}
       commit: ${{ steps.lock.outputs.commit }}
       short: ${{ steps.lock.outputs.short }}
     steps:
@@ -37,6 +38,8 @@ jobs:
           fi
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
           echo "short=${commit:0:12}" >> "$GITHUB_OUTPUT"
+          clickhouse_fingerprint="$(sha256sum images/clickhouse.Dockerfile images/clickhouse.railway.xml | sha256sum | cut -c1-12)"
+          echo "clickhouse_tag=sha-${commit:0:12}-bundle-${clickhouse_fingerprint}" >> "$GITHUB_OUTPUT"
       - name: Commit a changed upstream lock
         run: |
           if git diff --quiet -- posthog.lock.json; then
@@ -117,9 +120,9 @@ jobs:
       - id: existing
         name: Reuse an existing immutable candidate
         env:
-          EXPECTED_SHORT: ${{ needs.resolve.outputs.short }}
+          IMAGE_TAG: ${{ needs.resolve.outputs.clickhouse_tag }}
         run: |
-          image="ghcr.io/uptomic/posthog-railway/clickhouse:sha-${EXPECTED_SHORT}"
+          image="ghcr.io/uptomic/posthog-railway/clickhouse:${IMAGE_TAG}"
           if docker manifest inspect "$image" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
@@ -133,7 +136,7 @@ jobs:
           push: true
           provenance: true
           sbom: true
-          tags: ghcr.io/uptomic/posthog-railway/clickhouse:sha-${{ needs.resolve.outputs.short }}
+          tags: ghcr.io/uptomic/posthog-railway/clickhouse:${{ needs.resolve.outputs.clickhouse_tag }}
           build-args: |
             CLICKHOUSE_BASE_IMAGE=clickhouse/clickhouse-server:${{ steps.version.outputs.value }}
             COMMIT_HASH=${{ needs.resolve.outputs.commit }}
@@ -156,13 +159,22 @@ jobs:
       - name: Verify immutable candidate
         env:
           COMPONENT: ${{ matrix.component }}
+          CLICKHOUSE_TAG: ${{ needs.resolve.outputs.clickhouse_tag }}
           EXPECTED_COMMIT: ${{ needs.resolve.outputs.commit }}
           EXPECTED_SHORT: ${{ needs.resolve.outputs.short }}
         run: |
-          image="ghcr.io/uptomic/posthog-railway/${COMPONENT}:sha-${EXPECTED_SHORT}"
+          case "$COMPONENT" in
+            clickhouse) image="ghcr.io/uptomic/posthog-railway/clickhouse:${CLICKHOUSE_TAG}" ;;
+            mcp) image="ghcr.io/uptomic/posthog-railway/mcp:sha-${EXPECTED_SHORT}" ;;
+            *) exit 1 ;;
+          esac
           docker pull "$image"
           case "$COMPONENT" in
-            clickhouse) commit_file=/etc/uptomic-posthog-commit ;;
+            clickhouse)
+              commit_file=/etc/uptomic-posthog-commit
+              docker run --rm --entrypoint sh "$image" -c \
+                'grep -q "<background_schedule_pool_size>128</background_schedule_pool_size>" /etc/clickhouse-server/config.d/zz-railway-runtime.xml && grep -q "<listen_host replace=\"replace\">0.0.0.0</listen_host>" /etc/clickhouse-server/config.d/zz-railway-runtime.xml'
+              ;;
             mcp) commit_file=/code/commit.txt ;;
             *) exit 1 ;;
           esac
@@ -198,7 +210,7 @@ jobs:
             "ghcr.io/uptomic/posthog-railway/mcp:sha-${EXPECTED_SHORT}" \
             --format '{{json .Manifest}}' | jq -er .digest)"
           clickhouse_digest="$(docker buildx imagetools inspect \
-            "ghcr.io/uptomic/posthog-railway/clickhouse:sha-${EXPECTED_SHORT}" \
+            "ghcr.io/uptomic/posthog-railway/clickhouse:${{ needs.resolve.outputs.clickhouse_tag }}" \
             --format '{{json .Manifest}}' | jq -er .digest)"
           export MCP_DIGEST="$mcp_digest"
           export CLICKHOUSE_DIGEST="$clickhouse_digest"

@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<clickhouse>
+    <!-- Railway containers have a bounded PID budget. Keep enough scheduler
+         capacity for PostHog's Kafka engines without allowing ClickHouse's
+         global pool ceiling to become an eagerly allocated scheduler pool. -->
+    <background_schedule_pool_size>128</background_schedule_pool_size>
+    <background_message_broker_schedule_pool_size>128</background_message_broker_schedule_pool_size>
+    <max_thread_pool_size>512</max_thread_pool_size>
+
+    <!-- The official container adds both IPv4 and IPv6 wildcard listeners.
+         Railway's network namespace exposes them as the same socket. -->
+    <listen_host replace="replace">0.0.0.0</listen_host>
+
+    <!-- TLS terminates at Railway. PostHog's development ClickHouse config
+         declares secure listeners but does not ship their certificate files. -->
+    <https_port remove="remove" />
+    <tcp_port_secure remove="remove" />
+    <openSSL remove="remove" />
+
+    <logger>
+        <console>true</console>
+    </logger>
+</clickhouse>

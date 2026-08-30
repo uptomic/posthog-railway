@@ -22,7 +22,10 @@ PostHog does not publish versioned self-hosted releases. Upstream ships continuo
 3. The scheduled GitHub workflow locks PostHog's official application digests, rejects a
    `posthog-node` publication more than 72 hours old, builds `mcp` from the exact locked commit, and
    rebuilds ClickHouse from PostHog's pinned ClickHouse base plus that commit's config and UDF assets.
-   Both images are published as immutable SHA tags with provenance and SBOMs to GHCR.
+   The ClickHouse build also layers a narrowly scoped Railway runtime configuration: bounded thread
+   pools, one wildcard listener, edge-terminated TLS, and console logging. Its immutable tag includes
+   a fingerprint of those build inputs so a runtime-config change cannot silently reuse an old image.
+   Both images are published with provenance and SBOMs to GHCR.
 4. A successful build writes a second manifest that pins the built MCP and ClickHouse images by OCI
    digest.
 5. `bun run railway:plan` renders the coordinated application-service update. It does not apply it.
