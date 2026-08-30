@@ -5,6 +5,10 @@ if (!image || !baseImage || !baseRevision || !fingerprintSha256) {
 // Multi-platform Redis 7.4.11-alpine index, not the local ARM64 child manifest.
 const redisImage = "docker.io/library/redis@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf";
 const container = `posthog-node-redis-proof-${Date.now()}`;
+const network = `${container}-network`;
+const globalId = randomBytes(5).toString("hex");
+const ipv6Prefix = `fd${globalId.slice(0, 2)}:${globalId.slice(2, 6)}:${globalId.slice(6)}:1`;
+const fixtureIpv6 = `${ipv6Prefix}::2`;
 
 async function docker(args: string[], input?: string, includeStderr = false): Promise<string> {
   const child = Bun.spawn(["docker", ...args], {
@@ -47,12 +51,15 @@ const [redisConfig] = JSON.parse(await docker(["image", "inspect", redisImage]))
 if (redisConfig.Os !== baseConfig.Os || redisConfig.Architecture !== baseConfig.Architecture) {
   throw new Error("Disposable Redis fixture platform does not match the exact Node image");
 }
-await docker(["create", "--platform", redisPlatform, "--name", container,
-  "--add-host", "ipv6.railway.internal=::1",
-  "--add-host", "ipv4.railway.internal=127.0.0.1",
-  "--add-host", "unrelated.example.test=127.0.0.1", redisImage,
-  "redis-server", "--bind", "0.0.0.0", "::", "--save", "", "--appendonly", "no"]);
+// glibc maps a ::1-only hosts alias back to 127.0.0.1 for AF_INET lookups.
+// Use an actual isolated ULA address so the AAAA-only regression is meaningful.
+await docker(["network", "create", "--internal", "--ipv6", "--subnet", `${ipv6Prefix}::/64`, network]);
+let fixtureCreated = false;
 try {
+  await docker(["create", "--platform", redisPlatform, "--network", network,
+    "--ip6", fixtureIpv6, "--name", container, redisImage,
+    "redis-server", "--bind", "0.0.0.0", "::", "--save", "", "--appendonly", "no"]);
+  fixtureCreated = true;
   await docker(["start", container]);
   let ready = false;
   for (let attempt = 0; attempt < 20; attempt++) {
@@ -63,10 +70,20 @@ try {
     await Bun.sleep(250);
   }
   if (!ready) throw new Error("Disposable Redis did not become ready");
+  const [fixture] = JSON.parse(await docker(["inspect", container]));
+  const endpoint = fixture.NetworkSettings.Networks[network];
+  const ipv4 = endpoint?.IPAddress;
+  const ipv6 = endpoint?.GlobalIPv6Address;
+  if (isIP(ipv4 ?? "") !== 4 || isIP(ipv6 ?? "") !== 6 || !ipv6.startsWith("fd")) {
+    throw new Error("Disposable Redis needs both a private IPv4 address and a non-loopback ULA IPv6 address");
+  }
   const script = await Bun.file(new URL("./node-redis-probe.cjs", import.meta.url)).text();
   for (const [target, mode] of [[baseImage, "baseline"], [image, "overlay"]]) {
     const result = await docker([
-      "run", "--rm", "-i", "--network", `container:${container}`,
+      "run", "--rm", "-i", "--network", network,
+      "--add-host", `ipv6.railway.internal=${ipv6}`,
+      "--add-host", `ipv4.railway.internal=${ipv4}`,
+      "--add-host", `unrelated.example.test=${ipv4}`,
       "-e", "NODE_ENV=test", "--entrypoint", "node", target!, "-", mode!,
     ], script);
     console.log(result.trim());
@@ -79,6 +96,12 @@ try {
   console.error(`Disposable Redis state: ${state.slice(0, 2000)}\nLogs: ${logs.slice(-12000)}`);
   throw error;
 } finally {
-  await docker(["rm", "--force", container]);
+  try {
+    if (fixtureCreated) await docker(["rm", "--force", container]);
+  } finally {
+    await docker(["network", "rm", network]);
+  }
 }
 console.log("Exact official Node base and guarded overlay Redis proof passed; startup metadata inherited");
+import { randomBytes } from "node:crypto";
+import { isIP } from "node:net";

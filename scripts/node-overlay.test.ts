@@ -94,6 +94,19 @@ describe("immutable Node release contract", () => {
     expect(smoke).toContain('"{{json .State}}"');
     expect(smoke).not.toContain('["run", "--rm", "-d", "--name", container');
   });
+
+  test("uses non-loopback fixture addresses on an isolated IPv6 network and labels exact probe failures", async () => {
+    const smoke = await Bun.file(new URL("./node-smoke.ts", import.meta.url)).text();
+    const probe = await Bun.file(new URL("./node-redis-probe.cjs", import.meta.url)).text();
+    expect(smoke).toContain('"network", "create", "--internal", "--ipv6"');
+    expect(smoke).toContain('"--ip6", fixtureIpv6');
+    expect(smoke).toContain('"network", "rm", network');
+    expect(smoke).not.toContain('ipv6.railway.internal=::1');
+    expect(smoke).not.toContain('ipv4.railway.internal=127.0.0.1');
+    expect(probe).toContain('stage = "baseline:IPv4-DNS-rejection"');
+    expect(probe).toContain('stage, code: error.code');
+    expect(probe).toContain('actual: error.actual');
+  });
 });
 
 describe("guarded shared-client overlay", () => {
