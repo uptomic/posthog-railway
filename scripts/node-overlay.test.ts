@@ -80,7 +80,9 @@ describe("immutable Node release contract", () => {
   test("baseline proves the exact DNS failure separately from shared-client connection failure", async () => {
     const probe = await Bun.file(new URL("./node-redis-probe.cjs", import.meta.url)).text();
     expect(probe).toContain('lookup("ipv6.railway.internal", { family: 4 })');
-    expect(probe).toContain('{ code: "ENOTFOUND" }');
+    expect(probe).toContain('assert.equal(error.syscall, "getaddrinfo")');
+    expect(probe).toContain('assert.equal(error.hostname, "ipv6.railway.internal")');
+    expect(probe).toContain('assert.ok(["ENOTFOUND", "EAI_AGAIN"].includes(error.code))');
     expect(probe).toContain('await probe("ipv6.railway.internal", 6, 6)');
     expect(probe).not.toContain('assert.rejects(probe(');
   });

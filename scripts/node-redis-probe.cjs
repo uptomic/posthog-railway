@@ -33,8 +33,15 @@ async function probe(host, family, expectedFamily) {
     // ioredis can wrap ENOTFOUND as "Connection is closed". Prove the DNS cause
     // directly, and isolate construction from PING/assertion/QUIT failures.
     stage = "baseline:IPv4-DNS-rejection";
-    await assert.rejects(lookup("ipv6.railway.internal", { family: 4 }), { code: "ENOTFOUND" });
-    console.log("baseline: AAAA-only fixture rejects IPv4 DNS with ENOTFOUND");
+    await assert.rejects(lookup("ipv6.railway.internal", { family: 4 }), (error) => {
+      assert.equal(error.syscall, "getaddrinfo");
+      assert.equal(error.hostname, "ipv6.railway.internal");
+      // Docker's internal-only resolver may return SERVFAIL (EAI_AGAIN) instead
+      // of NXDOMAIN (ENOTFOUND) when the hosts file contains only an IPv6 record.
+      assert.ok(["ENOTFOUND", "EAI_AGAIN"].includes(error.code));
+      console.log(`baseline: AAAA-only fixture rejects IPv4 DNS with ${error.code}`);
+      return true;
+    });
     await probe("ipv6.railway.internal", 6, 6);
     stage = "baseline:default-shared-client-rejection";
     await assert.rejects(createRedisClient("redis://ipv6.railway.internal:6379", {
