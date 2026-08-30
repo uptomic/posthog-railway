@@ -14,7 +14,7 @@ jobs:
       - name: Verify OIDC and Railway credential presence
         env:
           INFISICAL_DOMAIN: https://secrets.uptomic.com
-          INFISICAL_IDENTITY_ID: 0d5a1a85-0765-4d96-909b-986a54eb728e
+          INFISICAL_IDENTITY_ID: b705b603-7dc0-44b1-91a6-b8bc7dc53287
           INFISICAL_OIDC_AUDIENCE: https://github.com/uptomic
           INFISICAL_WORKSPACE_ID: a2d31c74-dc3b-4e17-97b7-84bc5d3ec5fb
         run: |
