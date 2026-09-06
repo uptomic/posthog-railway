@@ -1,4 +1,7 @@
-# Uptomic PostHog Railway release bundle
+# Uptomic PostHog
+
+Repository: [uptomic/uptomic-posthog](https://github.com/uptomic/uptomic-posthog).
+The local checkout is `~/uptomic-work/uptomic-posthog`.
 
 This repository keeps Uptomic's self-hosted PostHog deployment aligned with upstream PostHog
 without allowing Railway services to drift independently.
@@ -78,9 +81,22 @@ PostHog does not publish versioned self-hosted releases. Upstream ships continuo
 
 Production promotion uses the dedicated `posthog-railway-release` machine identity in Career
 Mentor's existing Infisical project. GitHub authenticates with OIDC from the
-`uptomic/posthog-railway` repository on `main`; the identity has the built-in `no-access` role plus
+`uptomic/uptomic-posthog` repository on `main`; the identity has the built-in `no-access` role plus
 one additional privilege that can only describe and read `RAILWAY_API_TOKEN` in `prod` at `/`.
 It cannot list or read any other Career Mentor secret.
+
+## Repository rename compatibility
+
+The GitHub repository and local project were renamed to `uptomic-posthog` on 2026-09-06.
+The release identity's OIDC repository and subject constraints follow the renamed repository;
+its immutable repository ID, `main` branch restriction and secret permissions are preserved.
+The repository visibility claim matches the repository's existing public visibility.
+
+Published images continue to use `ghcr.io/uptomic/posthog-railway/`. Their paths, immutable
+digests, release manifests and build fingerprints remain valid. The existing
+`posthog-railway-release` identity name and older image source labels are compatibility
+identifiers. GitHub redirects historical source and workflow links to the renamed repository.
+Do not rewrite container references or regenerate release bundles solely for this name change.
 
 ## Inherited baseline
 

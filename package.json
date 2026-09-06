@@ -1,5 +1,5 @@
 {
-  "name": "@uptomic/posthog-railway",
+  "name": "@uptomic/posthog",
   "private": true,
   "scripts": {
     "candidate:verify": "bun scripts/verify-candidate.ts",
