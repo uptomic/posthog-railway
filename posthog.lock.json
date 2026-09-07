@@ -1,16 +1,16 @@
 {
   "candidateImages": {
-    "mcp": "ghcr.io/uptomic/posthog-railway/mcp:sha-fc180d4ca1e8"
+    "mcp": "ghcr.io/uptomic/posthog-railway/mcp:sha-8bcc0777fccf"
   },
   "supportingImages": {
     "gateway": "docker.io/library/caddy@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648"
   },
   "officialImages": {
     "main": {
-      "createdAt": "2026-09-06T00:30:47.97827668Z",
-      "digest": "sha256:c7beed52982a08c06c5732e791745e5a5402ed88ec8f28bf90dab4fb894a9b96",
-      "image": "ghcr.io/posthog/posthog@sha256:c7beed52982a08c06c5732e791745e5a5402ed88ec8f28bf90dab4fb894a9b96",
-      "revision": "fc180d4ca1e8c707fb5b2583f3ac5f1c527e3b7c",
+      "createdAt": "2026-09-06T22:01:44.057056603Z",
+      "digest": "sha256:79b6116daa80a203dd68e87d742333d371106ae29b378c5f3429fc62dee5c111",
+      "image": "ghcr.io/posthog/posthog@sha256:79b6116daa80a203dd68e87d742333d371106ae29b378c5f3429fc62dee5c111",
+      "revision": "5f8bc937a84b877dc737ab3f9b5317b82c4bf881",
       "source": "https://github.com/PostHog/posthog"
     },
     "capture": {
@@ -86,8 +86,8 @@
       "source": "https://github.com/PostHog/posthog"
     }
   },
-  "resolvedAt": "2026-09-06T02:34:38.951Z",
+  "resolvedAt": "2026-09-07T02:37:20.905Z",
   "schemaVersion": 1,
-  "upstreamCommit": "fc180d4ca1e8c707fb5b2583f3ac5f1c527e3b7c",
+  "upstreamCommit": "8bcc0777fccf1d1afaec68ce8c98f82f5b6752f6",
   "upstreamRepository": "PostHog/posthog"
 }
