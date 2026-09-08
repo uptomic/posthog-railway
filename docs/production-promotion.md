@@ -1,5 +1,18 @@
 # Production promotion runbook
 
+The single `posthog-ingestion` worker must use `PLUGIN_SERVER_MODE=ingestion-v2-combined`.
+Capture routes `$ai_*` events to a dedicated queue even when the SDK uses `/batch/`.
+Plain `ingestion-v2` consumes only the main queue unless a separate AI worker is configured.
+Before enabling this mode, provision and verify its Kafka topics and ClickHouse AI sinks. The
+first September 9 attempt reported `clickhouse_ai_events_json` missing and was rolled back.
+Private-network inspection subsequently verified the topic, leader and ClickHouse sinks. The
+combined mode was re-enabled on the original pinned image and verified with an active consumer,
+zero lag and a fresh marked trace returned from `posthog.ai_events` through the API.
+Production deployment: `5f504054-bc23-46c8-a737-78efb97e2d14`. The source patch still needs promotion.
+Verify a marked AI trace in the queryable store as well as an ordinary capture; HTTP 200 alone
+does not establish ingestion. The September 2026 correction changes the mode on the existing
+pinned image, without upgrading a component or adding another service.
+
 ## Preconditions
 
 - The candidate lock and Uptomic-built MCP image identify the same upstream commit.
