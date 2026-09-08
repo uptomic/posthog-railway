@@ -86,7 +86,12 @@ export function buildRailwayPlan(candidate: CandidateRelease, lock: PosthogLock)
       healthcheckPath: "/_health",
       restartPolicyType: "ALWAYS",
     },
-    "posthog-ingestion": { image: candidate.images.node },
+    "posthog-ingestion": {
+      image: candidate.images.node,
+      // Capture always routes AI events to a dedicated topic. This deployment
+      // uses one worker, so it must consume the AI lane as well as analytics.
+      pluginServerMode: "ingestion-v2-combined",
+    },
     "Recordings Blob Ingestion V2": {
       image: candidate.images.node,
       pluginServerMode: "recordings-blob-ingestion-v2",

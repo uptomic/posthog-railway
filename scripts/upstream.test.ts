@@ -175,6 +175,9 @@ describe("PostHog release bundle ownership", () => {
       expect(railwayPlan.services[serviceName].image).toBe(candidateFixture.images.node);
       expect(railwayPlan.services[serviceName]).not.toHaveProperty("startCommand");
     }
+    expect(railwayPlan.services["posthog-ingestion"].pluginServerMode).toBe(
+      "ingestion-v2-combined",
+    );
   });
 
   test("replaces the obsolete standalone Cyclotron janitor", () => {
