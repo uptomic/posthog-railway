@@ -7,6 +7,7 @@ const services = [
   ["flags", "FEATURE_FLAGS_INTERNAL_URL", 4103],
   ["live", "LIVESTREAM_INTERNAL_URL", 4104],
   ["web", "WEB_INTERNAL_URL", 4105],
+  ["config", "HYPERCACHE_INTERNAL_URL", 4106],
 ] as const;
 
 async function runGatewaySmoke(webAvailable: boolean): Promise<number> {
@@ -55,6 +56,8 @@ async function runGatewaySmoke(webAvailable: boolean): Promise<number> {
       return 0;
     }
     const routes = [
+      ["/array/phc_fixture/config", "config", "/array/phc_fixture/config"],
+      ["/array/phc_fixture/config.js", "config", "/array/phc_fixture/config.js"],
       ["/s", "replay", "/s"], ["/s/", "replay", "/s/"], ["/s/example", "replay", "/s/example"],
       ["/e", "capture", "/e"], ["/e/", "capture", "/e/"], ["/i/v0", "capture", "/i/v0"],
       ["/i/v1/analytics/events", "capture", "/i/v1/analytics/events"],

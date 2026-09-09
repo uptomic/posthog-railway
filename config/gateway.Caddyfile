@@ -8,6 +8,13 @@
 		respond 200
 	}
 
+	@sdkConfig path /array/*/config /array/*/config.js
+	handle @sdkConfig {
+		reverse_proxy {$HYPERCACHE_INTERNAL_URL} {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
 	@replay path /s /s/ /s/*
 	handle @replay {
 		reverse_proxy {$CAPTURE_REPLAY_INTERNAL_URL} {

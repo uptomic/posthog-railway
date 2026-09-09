@@ -5,6 +5,7 @@ export const officialComponents = {
   main: "posthog/posthog",
   capture: "posthog/posthog/capture",
   "feature-flags": "posthog/posthog/feature-flags",
+  "hypercache-server": "posthog/posthog/hypercache-server",
   livestream: "posthog/posthog/livestream",
   node: "posthog/posthog-node",
   "personhog-replica": "posthog/posthog/personhog-replica",
