@@ -5,7 +5,7 @@ const { readFileSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
 const { createRequire } = require("node:module");
 
-const overlayFiles = ["Dockerfile", "apply-overlay.cjs", "guard.json", "railway-redis-options.cjs", "janitor-pool-errors.cjs"];
+const overlayFiles = ["Dockerfile", "apply-overlay.cjs", "guard.json", "railway-redis-options.cjs", "janitor-pool-errors.cjs", "cymbal-dns.cjs"];
 const sharedClientPath = "/code/nodejs/dist/common/utils/db/redis.js";
 const janitorPath = "/code/nodejs/dist/cdp/services/cyclotron-v2/janitor.js";
 const constructorAnchor = "const redis = new ioredis_1.default(url, {\n        ...options,";
@@ -52,6 +52,16 @@ function patchJanitorSource(source, expectedConstructorSha256) {
     `${janitorPoolAnchor}\n        require("/opt/uptomic-node-overlay/janitor-pool-errors.cjs").attachJanitorPoolErrorHandler(this.pool, logger_1.logger);`));
 }
 
+function patchCymbalSource(source, expectedFunctionSha256) {
+  const matches = source.match(/^async function defaultDnsResolve\(hostname\) \{[\s\S]*?^\}/gm) ?? [];
+  if (matches.length !== 1 || sha256(matches[0]) !== expectedFunctionSha256) {
+    throw new Error("NODE_CYMBAL_DNS_FUNCTION_DRIFT");
+  }
+  return source.replace(matches[0], `async function defaultDnsResolve(hostname) {
+    return require("/opt/uptomic-node-overlay/cymbal-dns.cjs").resolveCymbalEndpoints(hostname);
+}`);
+}
+
 function applyOverlay() {
   const baseImage = process.env.NODE_BASE_IMAGE;
   const baseRevision = process.env.NODE_BASE_REVISION;
@@ -78,11 +88,14 @@ function applyOverlay() {
   }
   const patched = patchRedisSource(readFileSync(sharedClientPath, "utf8"), guard.functionSha256);
   const patchedJanitor = patchJanitorSource(readFileSync(janitorPath, "utf8"), guard.janitor.constructorSha256);
-  // Validate both owners before changing either compiled file.
+  const cymbalPath = "/code/nodejs/dist/ingestion/pipelines/errortracking/cymbal/client.js";
+  const patchedCymbal = patchCymbalSource(readFileSync(cymbalPath, "utf8"), guard.cymbal.dnsFunctionSha256);
+  // Validate every owner before changing any compiled file.
+  writeFileSync(cymbalPath, patchedCymbal);
   writeFileSync(sharedClientPath, patched);
   writeFileSync(janitorPath, patchedJanitor);
   writeFileSync("/code/node-overlay-provenance.json", `${JSON.stringify({ baseImage, baseRevision, fingerprintSha256 })}\n`);
 }
 
-module.exports = { overlayFingerprint, patchRedisSource, patchJanitorSource };
+module.exports = { overlayFingerprint, patchRedisSource, patchJanitorSource, patchCymbalSource };
 if (require.main === module) applyOverlay();
