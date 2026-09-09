@@ -50,6 +50,7 @@ describe("PostHog release bundle ownership", () => {
     expect(Object.keys(officialComponents).sort()).toEqual([
       "capture",
       "feature-flags",
+      "hypercache-server",
       "livestream",
       "main",
       "node",
@@ -87,6 +88,13 @@ describe("PostHog release bundle ownership", () => {
   });
 
   test("owns the gateway SDK routes in one versioned Caddyfile", () => {
+    expect(railwayPlan.services.Hypercache).toMatchObject({
+      image: lockPayload.officialImages["hypercache-server"].image,
+      environment: { ADDRESS: "[::]:3002", PORT: "3002" },
+      healthcheckPath: "/_readiness",
+    });
+    expect(gatewayCaddyfile).toContain("@sdkConfig path /array/*/config /array/*/config.js");
+    expect(gatewayCaddyfile).toContain("reverse_proxy {$HYPERCACHE_INTERNAL_URL}");
     expect(gatewayCaddyfile).toContain("handle /health {\n\t\trespond 200\n\t}");
     expect(gatewayCaddyfile.indexOf("handle /health")).toBeLessThan(
       gatewayCaddyfile.indexOf("handle @replay"),
@@ -102,7 +110,7 @@ describe("PostHog release bundle ownership", () => {
     expect(gatewayCaddyfile).toContain("handle_path /livestream*");
     expect(gatewayCaddyfile).toContain("reverse_proxy {$LIVESTREAM_INTERNAL_URL}");
     expect(gatewayCaddyfile).toContain("handle {\n\t\treverse_proxy {$WEB_INTERNAL_URL}");
-    expect(gatewayCaddyfile.match(/header_up X-Forwarded-Proto https/g)).toHaveLength(5);
+    expect(gatewayCaddyfile.match(/header_up X-Forwarded-Proto https/g)).toHaveLength(6);
     expect(gatewayCaddyfile).not.toContain("railway.internal");
   });
 

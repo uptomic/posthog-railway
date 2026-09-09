@@ -68,6 +68,13 @@
       "image": "ghcr.io/posthog/posthog/sqlx-migrate@sha256:de8bf4f5958a3e83de927fc70ec4a345ff768d513364f9e7db2ed3b36f4ea9ea",
       "revision": "6883cb3e2f9ac4d3594124d9915b1f93adc44dfd",
       "source": "https://github.com/PostHog/posthog"
+    },
+    "hypercache-server": {
+      "createdAt": "2026-09-04T14:12:51.312607499Z",
+      "digest": "sha256:5881e0c151b3aaf00da42ed78191a634390eb76f14564011fb58e9981303ee91",
+      "image": "ghcr.io/posthog/posthog/hypercache-server@sha256:5881e0c151b3aaf00da42ed78191a634390eb76f14564011fb58e9981303ee91",
+      "revision": "17b35cf13ecc8d9b2f831796b0d36d5ee5831e2d",
+      "source": "https://github.com/PostHog/posthog"
     }
   },
   "migrationBridges": {

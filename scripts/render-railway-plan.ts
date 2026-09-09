@@ -121,6 +121,21 @@ export function buildRailwayPlan(candidate: CandidateRelease, lock: PosthogLock)
       image: lock.officialImages.capture.image,
       environment: { ADDRESS: "[::]:3000" },
     },
+    "Hypercache": {
+      image: lock.officialImages["hypercache-server"].image,
+      port: 3002,
+      healthcheckPath: "/_readiness",
+      environment: {
+        ADDRESS: "[::]:3002",
+        PORT: "3002",
+        REDIS_URL: "${{Web.REDIS_URL}}",
+        OBJECT_STORAGE_BUCKET: "${{Web.OBJECT_STORAGE_BUCKET}}",
+        OBJECT_STORAGE_ENDPOINT: "${{Web.OBJECT_STORAGE_ENDPOINT}}",
+        OBJECT_STORAGE_REGION: "${{Web.OBJECT_STORAGE_REGION}}",
+        AWS_ACCESS_KEY_ID: "${{Web.OBJECT_STORAGE_ACCESS_KEY_ID}}",
+        AWS_SECRET_ACCESS_KEY: "${{Web.OBJECT_STORAGE_SECRET_ACCESS_KEY}}",
+      },
+    },
     "Property Defs RS": { image: lock.officialImages["property-defs-rs"].image },
     Livestream: {
       image: lock.officialImages.livestream.image,
@@ -149,7 +164,11 @@ export function buildRailwayPlan(candidate: CandidateRelease, lock: PosthogLock)
       healthcheckPath: "/health",
       port: 3000,
       configSource: "config/gateway.Caddyfile",
-      environment: { PORT: "3000", CADDY_CONFIG: gatewayCaddyfile },
+      environment: {
+        PORT: "3000",
+        CADDY_CONFIG: gatewayCaddyfile,
+        HYPERCACHE_INTERNAL_URL: "http://${{Hypercache.RAILWAY_PRIVATE_DOMAIN}}:3002",
+      },
     },
     "PostHog MCP": {
       image: candidate.images.mcp,

@@ -27,6 +27,17 @@ sh -c 'printf "%s" "$CADDY_CONFIG" | caddy run --config - --adapter caddyfile'
 
 ## Private routing
 
+SDK remote configuration is served by the official Hypercache service, not Web.
+Route `/array/*/config` and `/array/*/config.js` to `HYPERCACHE_INTERNAL_URL`
+on private port 3002. Hypercache uses the same Redis and object-storage configuration
+as Web's team configuration cache writer, with AWS access credentials supplied through
+Railway references. Bind `ADDRESS=[::]:3002` and check `/_readiness`.
+The bounded rollout adds only Hypercache and updates the gateway; it does not apply
+unrelated newly resolved component images from the full candidate.
+Verify project configuration returns HTTP 200 with session recording enabled, then
+verify a masked SDK recording's metadata and blob. Static recorder files alone do not
+establish replay readiness.
+
 | Public path | Upstream environment variable | Private destination |
 | --- | --- | --- |
 | `/s`, `/s/`, `/s/*` | `CAPTURE_REPLAY_INTERNAL_URL` | Replay Capture, HTTP port 3000 |
