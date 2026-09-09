@@ -75,6 +75,13 @@
       "image": "ghcr.io/posthog/posthog/hypercache-server@sha256:5881e0c151b3aaf00da42ed78191a634390eb76f14564011fb58e9981303ee91",
       "revision": "17b35cf13ecc8d9b2f831796b0d36d5ee5831e2d",
       "source": "https://github.com/PostHog/posthog"
+    },
+    "cymbal": {
+      "createdAt": "2026-09-07T09:46:52.587969339Z",
+      "digest": "sha256:56a413c294a8d295b71569bdcaa50d16bbef7edc658df115404365b370a07679",
+      "image": "ghcr.io/posthog/posthog/cymbal@sha256:56a413c294a8d295b71569bdcaa50d16bbef7edc658df115404365b370a07679",
+      "revision": "156c731b97ba6a5faf6433bb7800ba6659040d70",
+      "source": "https://github.com/PostHog/posthog"
     }
   },
   "migrationBridges": {
