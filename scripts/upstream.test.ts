@@ -49,6 +49,7 @@ describe("PostHog release bundle ownership", () => {
   test("tracks every externally published PostHog application component used by Railway", () => {
     expect(Object.keys(officialComponents).sort()).toEqual([
       "capture",
+      "cymbal",
       "feature-flags",
       "hypercache-server",
       "livestream",
@@ -88,6 +89,18 @@ describe("PostHog release bundle ownership", () => {
   });
 
   test("owns the gateway SDK routes in one versioned Caddyfile", () => {
+    expect(railwayPlan.services["Error Tracking Ingestion"]).toMatchObject({
+      pluginServerMode: "ingestion-errortracking",
+      environment: { ERROR_TRACKING_CYMBAL_BASE_URL: "http://${{Cymbal.RAILWAY_PRIVATE_DOMAIN}}:3305" },
+    });
+    expect(railwayPlan.services.Cymbal.environment).toMatchObject({
+      CYMBAL_REMOTE_RESOLUTION_HOST: "${{Cymbal Resolution.RAILWAY_PRIVATE_DOMAIN}}",
+      INTERNAL_API_SECRET: "${{posthog-ingestion.INTERNAL_API_SECRET}}",
+    });
+    expect(railwayPlan.services["Cymbal Resolution"].environment).toMatchObject({
+      CYMBAL_MODE: "resolution", GRPC_ADDRESS: "[::]:50061",
+      INTERNAL_API_SECRET: "${{posthog-ingestion.INTERNAL_API_SECRET}}",
+    });
     expect(railwayPlan.services.Hypercache).toMatchObject({
       image: lockPayload.officialImages["hypercache-server"].image,
       environment: { ADDRESS: "[::]:3002", PORT: "3002" },
