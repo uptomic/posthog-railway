@@ -1,7 +1,9 @@
 # Error-tracking ingestion
 
 Capture routes `$exception` to its own Kafka lane. `ingestion-v2-combined` consumes
-analytics and AI events; it does not own error tracking. Deploy the official Node
+analytics and AI events; it does not own error tracking. Capture defaults to the
+`error_tracking_events` topic, while the Node error consumer defaults to
+`ingestion-errortracking-main`. Explicitly bind the consumer to Capture's topic. Deploy the official Node
 `ingestion-errortracking` consumer, Cymbal processing HTTP service, and Cymbal
 resolution gRPC service together. The processor requires a nonempty remote resolution
 host and both Cymbal modes authenticate with the same existing internal API secret.

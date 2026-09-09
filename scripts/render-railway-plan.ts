@@ -146,6 +146,7 @@ export function buildRailwayPlan(candidate: CandidateRelease, lock: PosthogLock)
       healthcheckPath: "/_health",
       environment: {
         ERROR_TRACKING_CYMBAL_BASE_URL: "http://${{Cymbal.RAILWAY_PRIVATE_DOMAIN}}:3305",
+        ERROR_TRACKING_CONSUMER_CONSUME_TOPIC: "error_tracking_events",
       },
     },
     "Recording API": {
