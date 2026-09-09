@@ -6,5 +6,8 @@
     "pgVersion": "8.10.0",
     "pgPoolVersion": "3.6.0",
     "constructorSha256": "ae1524b566f11e5541e0a67201d0d617fbf89f7857ee5ef786f036c1882b17d9"
+  },
+  "cymbal": {
+    "dnsFunctionSha256": "662d6b79e928f510e8d1d06583b1d7dc7510ab9e2ed11ce5e7ecf8f07ac72119"
   }
 }

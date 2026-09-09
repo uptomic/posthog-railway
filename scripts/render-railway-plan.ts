@@ -19,6 +19,13 @@ export function assertCandidateMatchesLock(candidate: CandidateRelease, lock: Po
   assertNodeOverlayCandidate(candidate, lock);
   assertClickhouseBuildCandidate(candidate, lock);
 }
+const browserlessClientEnvironment = {
+  BROWSERLESS_CDP_URL: "ws://${{Browserless.RAILWAY_PRIVATE_DOMAIN}}:3000",
+  BROWSERLESS_TOKEN: "${{Browserless.TOKEN}}",
+  HEATMAP_BROWSERLESS_URL: "http://${{Browserless.RAILWAY_PRIVATE_DOMAIN}}:3000",
+  HEATMAP_BROWSERLESS_TOKEN: "${{Browserless.TOKEN}}",
+};
+
 export function buildRailwayPlan(candidate: CandidateRelease, lock: PosthogLock) {
   assertCandidateMatchesLock(candidate, lock);
   return {
@@ -69,11 +76,12 @@ export function buildRailwayPlan(candidate: CandidateRelease, lock: PosthogLock)
     Web: {
       image: lock.officialImages.main.image,
       startCommand: "./bin/docker-server",
-      environment: { GRANIAN_HOST: "::" },
+      environment: { GRANIAN_HOST: "::", ...browserlessClientEnvironment },
     },
     Worker: {
       image: lock.officialImages.main.image,
       startCommand: "./bin/docker-worker-celery --with-scheduler",
+      environment: browserlessClientEnvironment,
     },
     "Temporal Django Worker": {
       image: lock.officialImages.main.image,
@@ -95,6 +103,12 @@ export function buildRailwayPlan(candidate: CandidateRelease, lock: PosthogLock)
     "Recordings Blob Ingestion V2": {
       image: candidate.images.node,
       pluginServerMode: "recordings-blob-ingestion-v2",
+    },
+    Browserless: {
+      // Same release as the pinned upstream hobby stack; private access only.
+      image: "ghcr.io/browserless/chromium@sha256:79a37927bdd235c8f5a299a8846c37e946c3505dff2562ece3922d4562d016a3",
+      port: 3000,
+      environment: { HOST: "::", PORT: "3000", CONCURRENT: "2", TIMEOUT: "60000", TOKEN: "${{Web.SECRET_KEY}}" },
     },
     "Cymbal Resolution": {
       image: lock.officialImages.cymbal.image,
